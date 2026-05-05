@@ -21,7 +21,7 @@ def main():
 
     # Simulate non-uniform data
     # Generate weighted probability distribution
-    num_weighted = 5
+    num_weighted = 3
     probs = np.zeros(context.q)
     probs[:num_weighted] = 0.9 / num_weighted # Give first num_weighted values 90% of the mass
     probs[num_weighted:] = 0.1 / (context.q - num_weighted) # Give remaining values remaining 10% of the mass

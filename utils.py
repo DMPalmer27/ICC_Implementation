@@ -13,7 +13,7 @@ from config import SystemContext
 
 def generate_vandermonde_G(GF: type[galois.FieldArray], m: int, n: int) -> galois.FieldArray:
     """
-    This is not used in the ICC scheme and is relevant when the user's data is uniformly distributed.
+    This is not used in the ICC scheme and is relevant only when the user's data is uniformly distributed.
     It was phased out in favor of the random generator matrix for ICC.
 
     :param GF: Galois field object
@@ -70,7 +70,9 @@ def compute_p_entropy(x, q:int, p:int) -> float:
 
     probs = counts / total
     sum_pp = sum(prob ** p for prob in probs if prob > 0)
-    res = (1.0 / (p - 1)) * math.log(sum_pp, q)
+    res = (1.0 / (1 - p)) * math.log(sum_pp, q)
+    # I was getting negative entropy so I looked up p entropy and found it to be the same as Reyni entropy.
+    # The formula I found uses 1-p instead of p-1 in the denominator which gives positive results as expected.
     return res
 
 def compute_max_subset_p_entropy(x, q: int, p: int, r: int) -> float:
@@ -184,7 +186,7 @@ def get_information_superset(GF: type[galois.FieldArray], q: int, m: int, d: int
     :param S: Number of stragglers to have resilience against
     :return: Superset containing entries such that any subset of size lambda contain an information set
     """
-    base_points = get_simple_information_set(q, m, d)
+    base_points = get_information_set(q, m, d)
     lambda_len = len(base_points)
 
     # Start the super-set with the base Information Set
