@@ -70,9 +70,7 @@ def compute_p_entropy(x, q:int, p:int) -> float:
 
     probs = counts / total
     sum_pp = sum(prob ** p for prob in probs if prob > 0)
-    res = (1.0 / (1 - p)) * math.log(sum_pp, q)
-    # I was getting negative entropy so I looked up p entropy and found it to be the same as Reyni entropy.
-    # The formula I found uses 1-p instead of p-1 in the denominator which gives positive results as expected.
+    res = (1.0 / (p-1)) * math.log(sum_pp, q)
     return res
 
 def compute_max_subset_p_entropy(x, q: int, p: int, r: int) -> float:
@@ -90,11 +88,12 @@ def compute_max_subset_p_entropy(x, q: int, p: int, r: int) -> float:
     n = len(x)
     x_arr = np.array([int(v) for v in x])
 
-    max_entropy = 0.0
+    max_entropy = -9999999
     for indices in itertools.combinations(range(n), r):
         subset = x_arr[list(indices)]
         h = compute_p_entropy(subset, q, p)
         if h > max_entropy:
+            print(h)
             max_entropy = h
     return max_entropy
 

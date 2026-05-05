@@ -12,7 +12,7 @@ class SystemContext:
     q: int = 31 # Field size
     n: int  = 30 # Data length
     d: int  = 2 # Max polynomial degree
-    r: int  = 30 # Privacy parameter
+    r: int  = 5 # Privacy parameter
     p: int = 2 # Value for p-entropy
     epsilon: float = 1e-6 # smoothing "budget"
     a: float = 5 # confidence parameter of successful smoothing
