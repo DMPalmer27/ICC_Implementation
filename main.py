@@ -66,7 +66,7 @@ def main():
 
     # Random polynomial that I chose to use for this toy example
     def target_polynomial(data):
-        x1, x2, x3 = data[0], data[1], data[2]
+        x1, x2, x3, = data[0], data[1], data[2]
         return (x1 ** 2) + (x2 * x3)
 
     points, results = server.compute_request(target_polynomial)

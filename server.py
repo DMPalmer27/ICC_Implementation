@@ -48,7 +48,7 @@ class Server:
         for p in self.points:
             tG = np.matmul(p, self.G)
             shifted_data = self.x_tilde - tG
-            self.workers.append(Worker(self.GF, shifted_data))
+            self.workers.append(Worker(shifted_data))
 
     def _get_evaluation_points(self) -> list[galois.FieldArray]:
         """

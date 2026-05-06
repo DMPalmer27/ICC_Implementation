@@ -1,0 +1,152 @@
+========================================================================
+  ICC IMPLEMENTATION TEST SUITE
+  Individual Confidential Computing of Polynomials
+  over Non-Uniform Information  (Tarnopolsky et al. 2025)
+========================================================================
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 1 · CORRECTNESS
+════════════════════════════════════════════════════════════════════════
+
+  ── 1a · Polynomial variety (10 trials each) ──────────────────────────
+  Polynomial                                  Trials  Pass  Fail  Avg ms    
+  --------------------------------------------------------------------------
+  f = x0² + x1·x2          (degree 2, 3 vars) 10      10    0     1380.7    
+    ✓  
+  f = x0 + x1 + x2         (degree 1, linear) 10      10    0     1363.2    
+    ✓  
+  f = x0·x1 + x2·x3        (degree 2, 4 vars) 10      10    0     1389.8    
+    ✓  
+  f = x0² + x1² + x2²      (pure squares)     10      10    0     1411.7    
+    ✓  
+  f = x0·x1·x2             (degree 3, 3 vars) 10      10    0     19842.5   
+    ✓  
+  f = x0·x1·x2·x3          (degree 4, 4 vars) 10      10    0     448252.4  
+    ✓  
+
+  ── 1b · Parameter variety (f = x0 + x1) ──────────────────────────────
+  Params (q,n,d,r)        Trials  Pass  Fail  Avg ms    
+  ------------------------------------------------------
+  (31,8,2,4)              5       5     0     887.5     
+  (37,10,2,3)             5       5     0     1167.9    
+  (41,6,3,2)              5       5     0     13028.0   
+  (31,12,1,5)             5       5     0     12.9      
+
+    ✓  Parameter variety tests passed correctly
+
+  ── 1c · Random key stability (50 independent trials) ─────────────────
+
+  Passed 50/50 trials  |  avg time 902.2 ms
+    ✓  All 50 random-key trials decoded correctly
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 2 · THEOREM 1 BOUND VALIDATION
+════════════════════════════════════════════════════════════════════════
+
+  ── Parameter sweep – bound satisfaction ──────────────────────────────
+  Params (q,n,r,p,ε)              H_p(X)    max H_p(X_R)  m (computed)  Bound RHS   
+  ----------------------------------------------------------------------------------
+  (31,8,3,2,1e-04)                0.241     0.320         13 ✓T         13          
+  (31,10,5,2,1e-06)               0.253     0.371         17 ✓T         17          
+  (31,12,4,2,1e-06)               0.345     0.404         19 ✓T         19          
+  (31,8,3,3,1e-05)                0.124     0.320         15 ✓T         15          
+  (37,10,4,2,1e-06)               0.215     0.272         16 ✓T         16          
+
+    ✓  All parameter combinations satisfy Theorem 1 tight bound
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 3 · PRIVACY / LEAKAGE ANALYSIS
+════════════════════════════════════════════════════════════════════════
+
+  ── 3a · Leakage vs smoothing budget ε  (q=31,n=10,r=5,p=2,skew=0.9) ──
+  ε           m     H_p(X)    max H_p(X_R)  ε_c (leakage bound)   
+  ----------------------------------------------------------------
+  1e-02       14    0.332     0.469         0.57784776            
+  1e-04       15    0.332     0.469         0.09129453            
+  1e-06       17    0.332     0.469         0.00980095            
+  1e-08       18    0.332     0.469         0.00098755            
+  1e-10       19    0.332     0.469         0.00009883            
+
+    ✓  ε_c is strictly decreasing as ε decreases ✓
+
+  ── 3b · Leakage vs data skewness  (ε=1e-6, fixed seeds) ──────────────
+  skew_frac   H_p(X)    max H_p(X_R)  m     ε_c                   
+  ----------------------------------------------------------------
+  0.30        0.499     0.469         16    0.00980095            
+  0.50        0.416     0.469         17    0.00980095            
+  0.70        0.416     0.469         17    0.00980095            
+  0.80        0.351     0.371         17    0.01044852            
+  0.90        0.190     0.190         17    0.01238692            
+  0.95        0.226     0.298         17    0.01109537            
+
+  ── 3c · Confidence parameter a  (probability ≥ 1 − 1/a) ──────────────
+  ε_c formula scales with a; prob guarantee = 1 − 1/a.
+  a       Prob guarantee    m       ε_c
+  --------------------------------------------------------
+  2       ≥ 0.500           17      0.00394019
+  5       ≥ 0.800           17      0.00980095
+  10      ≥ 0.900           17      0.01943970
+  20      ≥ 0.950           17      0.03825144
+  50      ≥ 0.980           17      0.09129453
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 4 · ENTROPY SENSITIVITY
+════════════════════════════════════════════════════════════════════════
+
+  ── 4a · p-entropy decreases with p ───────────────────────────────────
+  For fixed data, H_p(X) should be non-increasing in p.
+  p     H_p(X)      Monotone?   
+  ------------------------------
+  2     0.310962    ✓           
+  3     0.307396    ✓           
+  4     0.304406    ✓           
+  5     0.301925    ✓           
+  6     0.299877    ✓           
+
+    ✓  H_p(X) is non-increasing in p ✓
+
+  ── 4b · Encoded data entropy (smoothing effectiveness) ───────────────
+  After encoding, H_p(X̃) should be higher (i.e., more
+  uniform) than H_p(X).
+  skew=0.7: H_p(X)=0.2623  →  H_p(X̃)=0.4875  ↓ more uniform ✓
+  skew=0.9: H_p(X)=0.2206  →  H_p(X̃)=0.5406  ↓ more uniform ✓
+  skew=0.95: H_p(X)=0.1518  →  H_p(X̃)=0.5406  ↓ more uniform ✓
+
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 5 · EDGE CASES & STRESS TESTS
+════════════════════════════════════════════════════════════════════════
+
+  ── 5a · r=1 (minimal privacy parameter) ──────────────────────────────
+    ✓  r=1: m=14, decoded correctly ✓
+
+  ── 5b · Near-deterministic data (1 element has 99% mass) ─────────────
+    ✓  Near-deterministic data handled correctly ✓ (m=15)
+
+════════════════════════════════════════════════════════════════════════
+  SECTION 6 · MASSIVE DATASETS (m << n PROOF)
+════════════════════════════════════════════════════════════════════════
+This section uses an O(1) exact entropy scaling shortcut for i.i.d. 
+data to prove that as dataset size (n) scales to massive numbers, 
+the required key size (m) remains small and manageable (m << n) 
+as long as the data has high entropy (e.g., roughly uniform).
+  Dataset Size (n)  r     Skew    H_p(X)      Key Size (m)  m << n?   
+  --------------------------------------------------------------------
+  10,000            50    0.1     9999.7      57            Yes ✓     
+  100,000           100   0.1     99996.5     110           Yes ✓     
+  500,000           500   0.05    496400.4    4,102         Yes ✓     
+  100,000           100   0.95    34971.1     65,070        No ✗      
+
+  Observation: For low entropy data (skew 0.95), H_p(X) is small,
+  so the formula m >= n + ... - H_p(X) correctly requires m ~ n.
+  For high entropy data, H_p(X) ~ n, canceling out n and allowing m << n.
+
+════════════════════════════════════════════════════════════════════════
+  SUMMARY
+════════════════════════════════════════════════════════════════════════
+
+  Total test time : 4859.8 s
+  Total failures  : 0
+
+  ✓  ALL TESTS PASSED — implementation matches paper claims.
+

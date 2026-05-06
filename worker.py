@@ -10,14 +10,12 @@ import galois
 
 class Worker:
 
-    def __init__(self, GF: Type[galois.FieldArray], data: galois.FieldArray):
+    def __init__(self, data: galois.FieldArray):
         """
         Initializes a worker with data
 
-        :param GF: Galois field object for the scheme
         :param data: Data that this worker holds
         """
-        self.GF = GF
         self.data = data
 
     def evaluate(self, f: Callable):

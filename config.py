@@ -10,7 +10,7 @@ from dataclasses import dataclass
 @dataclass
 class SystemContext:
     q: int = 31 # Field size
-    n: int  = 30 # Data length
+    n: int  = 10 # Data length
     d: int  = 2 # Max polynomial degree
     r: int  = 5 # Privacy parameter
     p: int = 2 # Value for p-entropy

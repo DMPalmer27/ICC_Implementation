@@ -70,7 +70,7 @@ def compute_p_entropy(x, q:int, p:int) -> float:
 
     probs = counts / total
     sum_pp = sum(prob ** p for prob in probs if prob > 0)
-    res = (1.0 / (p-1)) * math.log(sum_pp, q)
+    res = (1.0 / (1-p)) * math.log(sum_pp, q)
     return res
 
 def compute_max_subset_p_entropy(x, q: int, p: int, r: int) -> float:
@@ -93,7 +93,6 @@ def compute_max_subset_p_entropy(x, q: int, p: int, r: int) -> float:
         subset = x_arr[list(indices)]
         h = compute_p_entropy(subset, q, p)
         if h > max_entropy:
-            print(h)
             max_entropy = h
     return max_entropy
 
