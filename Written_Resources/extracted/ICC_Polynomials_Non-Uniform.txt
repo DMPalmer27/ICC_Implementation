@@ -1,0 +1,1253 @@
+
+===== PAGE 1 =====
+
+Individual Confidential Computing of Polynomials
+over Non-Uniform Information
+Saar Tarnopolsky∗, Zirui (Ken) Deng†, Vinayak Ramkumar‡, Netanel Raviv†, and Alejandro Cohen∗
+∗Faculty of ECE, Technion, Israel, saar@campus.technion.ac.il, alecohen@technion.ac.il
+†Department of Computer Science and Engineering, Washington University in St. Louis, St. Louis, USA,
+d.ken,netanel.raviv@wustl.edu
+‡Department of Electrical Engineering–Systems, Tel Aviv University, Israel, vinram93@gmail.com
+Abstract—In this paper, we address the problem of secure
+distributed computation in scenarios where user data is not
+uniformly distributed, extending existing frameworks that as-
+sume uniformity, an assumption that is challenging to enforce
+in data for computation. Motivated by the pervasive reliance on
+single service providers for data storage and computation, we
+propose a privacy-preserving scheme that achieves information-
+theoretic security guarantees for computing polynomials over
+non-uniform data distributions. Our framework builds upon the
+concept of perfect subset privacy and employs linear hashing
+techniques to transform non-uniform data into approximately
+uniform distributions, enabling robust and secure computation.
+We derive leakage bounds and demonstrate that information
+leakage of any subset of user data to untrusted service providers,
+i.e., not only to colluding workers but also (and more importantly)
+to the admin, remains negligible under the proposed scheme.
+I. I NTRODUCTION
+The widespread adoption of third-party services for data
+storage and computation poses significant privacy and security
+risks. Various approaches were considered for this crucial
+problem. For example, Differential Privacy measures a service
+provider’s ability to infer user data by analyzing changes in
+output statistics caused by altering a single data point [1]–
+[3]. Privacy-Utility Tradeoffs involve users providing distorted
+data to the service provider, with security measured by the
+level of service achievable given the distortion [4], [5]. Perfect
+Privacy considers user-encoded data and evaluates security
+based on the mutual information between the confidential and
+encoded data [6]–[8]. In computer science, similar security
+risks are addressed under the framework of Confidential
+Computing [9]–[11]. This approach ensures the isolation of
+confidential data across untrusted service providers through
+hardware and software guarantees.
+In this paper, we consider the framework of Perfect Privacy,
+or more specifically Perfect Subset Privacy [12]. Coded com-
+puting methods have been developed to tackle privacy issues in
+these framework [13]–[16], but they typically provide privacy
+guarantees in terms of some level of restricted collusion among
+workers, while the system administrator is assumed to be
+trusted. Recent work [17] highlights a frequently overlooked
+yet common scenario in which a data owner entrusts their
+data to a single untrusted service provider for storage and
+computation. In this setting, illustrated in Fig. 1, the service
+provider presents an inherent privacy risk by having full access
+to the data. This remains true regardless of whether storage and
+computation are internally distributed, effectively nullifying
+any assumptions about limited collusion among workers. This
+Fig. 1: Individual confidential computing (ICC) scheme for non-
+uniform data, X∈ Fn
+q , drawn from some unknown distribution. Red
+dashed line represents the “security barrier” in ICC scheme. Instead
+of protecting the admin’s data against colluding workers [13]–[16],
+ICC protects the user’s data against the service provider as a whole.
+single-provider scenario represents a more realistic and preva-
+lent setting for modern cloud computing services, necessitating
+novel approaches to secure computation.
+Ref. [17] broadens the scope of coded computing by devel-
+oping techniques that protect privacy against the entire service
+provider. Specifically, [17] considers a setting where the user
+possesses uniformly distributed data. The service provider
+comprises a system administrator and multiple workers, with
+no restrictions on potential collusion among workers. The
+user cannot communicate directly with the workers and must
+interact solely through the system administrator. To safeguard
+their data, the user encodes the data using a random key
+and sends the encoded version to the administrator, who
+then distributes it to the workers. Due to storage constraints,
+the user retains only the key as side information and relies
+on information exchange with the system administrator to
+retrieve the desired computation results, potentially utilizing
+the random key in the process.
+In this work, we generalize [17] by considering user data
+that is not necessarily uniformly distributed and provide
+information-theoretic security guarantees accordingly. The pri-
+vacy framework introduced in [17] employs the recently de-
+veloped concept of perfect subset privacy [12], which ensures
+zero leakage from any subset of the data up to a specified size.
+However, when dealing with non-uniform user data, achieving
+zero leakage becomes impossible without local randomness
+at the user’s data entropy (see Section III). Therefore, in this
+paper, we aim to guarantee limited information leakage instead
+of absolute zero leakage, which, as demonstrated in [18],
+meets the cryptographic criterion for ineligibility [19]–[21].
+To achieve this, we utilize the smoothing technique introduced
+by M. Pathegama et. al. [22], which enables the transformation
+of an unknown source with a given entropy level into a
+arXiv:2501.15645v1  [cs.IT]  26 Jan 2025
+
+===== PAGE 2 =====
+
+uniform random variable using a random linear code and a
+uniform key. This transformation enables the application of
+coded computing methods for secure distributed computation
+in non-uniform settings.
+We introduce the concept of Individual Confidential Com-
+puting (ICC) to extend secure computation frameworks further.
+Unlike traditional privacy settings where adversaries observe
+only a subset of the encoded data, ICC assumes that the entire
+encoded message is accessible to untrusted service provider.
+ICC ensures that no information about any subset of the user’s
+data, up to a specified size, leaks to the service provider. This
+definition broadens the applicability of secure computation
+techniques, as it accommodates the realistic assumption of full
+data access by the service provider.
+The remainder of the paper is structured as follows. The
+general computation model for this work is given in Section II.
+The privacy and security metrics under consideration are
+discussed in Section III. Preliminary results from previous
+works are provided in Section IV. The main results of this
+work are presented in Section V.
+II. C OMPUTATION SYSTEM MODEL
+Consider a user possessing data X = (X1,...,X n)∈ Fn
+q ,
+drawn from some unknown distribution. As illustrated in
+Fig. 1, the user wishes to share data with a third-party service
+provider in order to compute a polynomial f on X at a later
+point in time, and f is not known prior to sharing of data. The
+user encodes X into ˜X = ˜E(X,K ), where K∼ Unif(Fm
+q ) is
+a randomly generated secret key with m≪ n. The encoded
+data ˜X is then transmitted to the system administrator of
+the service provider, who subsequently distributes it to the
+workers within the system. The user intends to discard the
+original data X and retain only the secret key K as side
+information, thereby minimizing storage requirements. This
+process is referred to as the storage phase of the model.
+At a later point, the user is interested in computation of
+some specific polynomial f over their original data, and
+they share the identity of f with the system admin. The
+polynomial f is not known during the storage phase. Upon
+receiving f, the admin coordinates the workers to perform
+some computation over their share of the encoded data and
+return the results. The administrator then aggregates these
+results and sends them to the user. Utilizing this aggregated
+information in conjunction with the secret key K, the user
+performs the final decoding to retrieve the desired valuef (X).
+We call this the computation phase of the model. Among all
+workers, there may exist some straggling ones that fail to
+respond in a timely manner, and the admin must ensure that
+sufficient information is available for decoding f (X) even in
+the presence of such stragglers.
+The primary distinction in our work lies in the handling of
+non-uniformly distributed data X. Unlike in [17], where X is
+assumed to be uniformly distributed, in this work our approach
+guarantees secure polynomial computation over non-uniform
+user data, thereby extending the applicability and robustness
+of coded computing techniques.
+We say that any scheme that realizes this computation model
+is an (n,q,r,d,S ) scheme, where n is the length of the data
+held by the user, q is the field size, r < n is the security
+parameter (see Section III for details), d is the maximum total
+degree of f, and S is the maximum number of stragglers in
+the system. We judge the merit of such schemes by three
+quantities: the number of workers needed, measured by the
+parameterN; download cost, measured by the numberD of Fq
+symbols the user needs to download in order to complete the
+decoding process; side information, measured by m, the size
+of the random key K.
+III. P RIVACY AND SECURITY METRICS
+In his seminal 1949 work [23], Shannon introduced the
+concept of perfect secrecy for communication between two
+legitimate users, Alice and Bob, in the presence of an eaves-
+dropper, Eve. Shannon defined information-theoretic perfect
+secrecy as an encoding that satisfies I( ˜X;X) = 0 , where
+X is the secret message sent from Alice to Bob, ˜X is the
+encoding ofX observed by Eve, andI(·;·) denotes the mutual
+information function. In other words, the encoded message is
+independent of the original message. Shannon demonstrated
+that this level of secrecy can only be achieved if Alice and
+Bob share a secret key with entropy at least as large as the
+entropy of the message, i.e., H(K)≥H(X).
+Sharing large secret keys per transmission between Alice
+and Bob is not practical in real communication systems. Con-
+sequently, relaxations of perfect secrecy have been proposed to
+enable more practical secrecy measures. One such relaxation
+involves limiting Eve’s observations of the encoded message.
+This approach, known as physical layer security [24], exploits
+Eve’s weaker observations to achieve security at the expense
+of the communication rate. An example of such a scheme is
+the Wiretap Channel of Type II, introduced by Ozarow and
+Wyner in [25]. In their scheme, Eve observes w out of n
+transmitted symbols of the encoded message, denoted by ˜Xw.
+Ozarow and Wyner demonstrated that, by using a local source
+of randomness, Eve cannot gain any information about the
+encoded message from her observations, i.e., I( ˜Xw;X) = 0 ,
+provided that Alice transmits at a rate lower than n−w
+n .
+To increase the secure communication rate, another relax-
+ation was proposed, referred to as individual secrecy (IS) [26],
+[27]. In this setting, Alice aims to transmit ℓ messages to
+Bob:X1,...,X ℓ, where Eve can observe any w<ℓ encoded
+messages denoted by ˜X w. Individual secrecy guarantees that
+{I( ˜X w;Xi) = 0}ℓ
+i=1. That is, Eve cannot obtain information
+about any individual message but may gain an insignificant
+amount of information about the combination of messages
+X1,...,X ℓ [28]. Although a negligible amount of information
+may leak about the combination of messages, Eve has no
+knowledge of any individual message, while Alice can transmit
+at the full communication rate. IS can also be extended to sets
+of messages, i.e., I( ˜X w;X ℓ−w) = 0 for any subset of ℓ−w
+messages from X1,...,X ℓ. Unlike previous notions, IS does
+not require Alice to use a secret random key for encoding.
+Instead, Alice mixes the messages, using a subset of them
+to protect the remaining ones. However, this approach implies
+
+===== PAGE 3 =====
+
+that, unlike earlier schemes, Alice must compress the messages
+prior to encoding in order to handle non-uniform information
+and achieve individual secrecy [18], [29].
+In this paper, we aim to provide secrecy in computation
+[30]–[32]. In the literature, this concept is often referred
+to as Perfect Privacy [6], [7], or Confidential Computing
+in the computer science society [9]–[11]. In these settings,
+a legitimate user seeks to perform some computation on a
+random variable X, and the computation is delegated to an
+untrusted service provider which consists of an admin and
+workers (see Fig. 1). The user encodes X into ˜X s.t. the
+admin and workers cannot obtain any information about X
+from ˜X, i.e., I( ˜X;X) = 0 . This definition resembles perfect
+secrecy and similarly requires encoding X using a large secret
+key. Perfect Confidential Computing is a very strong notion
+that requires a key as big as the data itself. Thus, relaxations
+for this setting have also been considered, e.g., Privacy-Utility
+tradeoffs, Differential Privacy, and more [4], [5], [33], [34].
+In this work, we focus on Individual Confidential Com-
+puting (ICC) . In ICC, the user performs computation on a
+random variable X ∈ Fn
+q using an untrusted admin and
+workers. However, ICC ensures that the untrusted admin and
+workers cannot obtain any information about any subset of size
+1≤r < nsymbols of X from observing the entire encoded
+message ˜X, where r is a tunable security parameter. Below,
+we provide the formal definition of ICC.
+Definition 1 (Individual Confidential Computing) . Let X∈
+Fn
+q be a random variable with distribution pX, 1≤r<n and
+[n] ≜{1,...,n } be a security parameter. An encoding scheme
+is said to be Individually Confidential Computing (ICC) if
+I(XR; ˜X)≤ϵc for allR∈
+ [n]
+r
+
+and some negligible ϵc > 0.
+Remark 1. The definition of ICC is equivalent to the concept
+of r-subset privacy considered in [12], [17] for uniform
+information. Moreover, an important distinction between ICC
+definition and IS is that, in IS, Eve may observe only a subset
+of the encoded information, whereas in ICC, the untrusted
+admin and workers have access to the entire encoded message.
+To achieve this level of security, even with uniform information,
+ICC schemes must utilize a random key of at least size r as
+demonstrated in [12], [17].
+Remark 2. The key size m for an (n,q,r,d,S ) computation
+model is a function of the selected ϵc in Definition 1, as
+shown in Theorem 1 and illustrated in Example 1 (see Figs. 2a
+and 2b).
+IV. P RELIMINARIES
+A. Smoothing
+In this paper, we utilize smoothing of distributions [35], [36]
+as a method to achieve ICC (Definition 1) for non-uniform
+information. Smoothing of distributions is used a technique
+to transform a non-uniform random variable X ∈ Fn
+q into
+an almost uniform random variable. Due to space limitation
+we provide here a brief overview of the connection between
+smoothing and ICC (Definition 1), and refer to [37, Appendix
+A] for a more detailed description.
+We start by providing a formal definition of smoothing of
+distributions as also used in [22]. We use the p-variational
+distance denoted by Vp(·,·) for p≥ 1, p∈ N to measure the
+distance of the smoothed distribution to a uniform distribution.
+Definition 2. (Smoothing using Linear Codes) Let X∈ Fn
+q be
+some non-uniform random variable with distributionX∼pX.
+Let C = [n,m ]q be a linear code. Let C∈ Fn
+q be a uniformly
+randomly chosen codeword from C, and ˜X =X +C. Denote
+the distribution ˜X∼p ˜X. We say the code C is smoothing the
+distributionX∼pX if Vp (p ˜X,p Un )≤ϵs for some negligible
+ϵs > 0, where pUn is the uniform distribution over Fn
+q .
+Thus, the encoding ˜X = X +C, where C is chosen
+uniformly from C, generates a random variable ˜X that is
+nearly uniformly distributed over Fn
+q .
+In Thm. 3.1 of [22], M. Pathegama et. al., provide the
+condition under which a random linear code C = [n,m ]q with
+a generator matrix G∈ Fm×n
+q and K∼ Unif(Fm
+q ) performs
+smoothing on a non-uniform distribution X ∼ pX, where
+X∈ Fn
+q , through the encoding ˜X = X +KG. Specifically,
+the theorem asserts that for p ≥ 2, and negligible ϵ > 0,
+takingm larger than a function ofn,p, logq(1/ϵ), andHp(X),
+ensures that with high probability, a randomly chosen linear
+code C = [n,m ]q performs smoothing of X∼pX s.t.
+Vp(p ˜X,p Un )≤ 2
+p−1
+p ((1 +ϵ)p− 1)
+1
+p.
+In this paper, we apply this result within the context
+of ICC. ICC quantifies information leakage through mutual
+information. Thus, for negligible information leakage, ICC
+requires the encoded information and the distribution of some
+subset of the data to be nearly independent. This requirement
+is equivalent to asking for the distributions p ˜X and p ˜X|XR
+to be close to each other, when R is some subset of size r
+of the encoded data. In Sec. V-A and V-B, smoothing and
+[22, Thm. 3.1] are used to ensure the required distributions
+are nearly uniform, which results in negligible leakage and
+consequently the satisfaction of ICC conditions.
+B. Code-Based Polynomial Computation Scheme
+For completeness, we summarize the (n,q,r,d,S ) scheme
+used in [17] based on information super-sets for Reed-Muller
+codes. The scheme improves upon a trivial decoding scheme
+that is equivalent to trying all possible guesses for the correct
+random key.
+An information setI for a code C is a subset of positions
+within any codeword of C that uniquely determines the entire
+codeword. A multiset T is called an S-information super-
+set for a code C if every (|T|− S)-subset of T contains
+an information set for C. For parameters d and m, denote
+RMq(d,m ) = {Eval(h) | h ∈ Fq[x], deg(h) ≤ d} as the
+Reed-Muller code over Fq, where deg(·) denotes the total
+degree of a polynomial, and Eval (h) = (h(z))z∈Fmq .
+Provided the total degreed of the polynomialf satisfiesd<
+m(q− 1), where m is the dimension of the linear code used
+in the current paper for smoothing, the information super-
+set based (n,q,r,d,S )-scheme in [17] can be described as
+
+===== PAGE 4 =====
+
+(a) m as function of information leakage ϵ for data entropy n− 4,
+i.e. minR,z∈Frq (Hp(X|XR =z)) = n− 4.
+(b) m as function of data entropy minR,z∈Frq (Hp(X|XR =z)) for
+ϵ =n−2≈ 10−12.
+Fig. 2: Key size m as a function of (a) information leakage and (b)
+entropy of the data, for n = 262144 = 2 18, p = 2, q = 2, r = 2.
+follows. LetT be an S-information super-set for RMq(d,m )
+with size|T| =N. Let G∈ Fm×n
+q be the generator matrix of
+the linear code C.
+i) The user encodes X to ˜X =X +KG forK∼ Unif(Fm
+q ),
+and sends ˜X to the admin.
+ii) The admin encodes ˜X to ˆX = ( ˆX1,..., ˆXN ) = ( ˜X−
+TG|T∈T ) and distributes them to a total of N workers.
+iii) At a later point, the user sends f to the admin, who then
+sends it to the workers. The workers apply f on their
+data, and send the results back to the admin.
+iv) The admin obtains {f ( ˜X−TG )}T∈I, where I ⊆ T
+is an information set for RMq(d,m ), and sends A ≜
+(f ( ˜X−TG ))T∈I to the user.
+v) The user linearly combines the values in A to ob-
+tain f (X).
+To see why this scheme works, define multivariate polyno-
+mialg : Fm
+q → Fq asg(T ) ≜f ( ˜X−TG ). From the definition
+of information super-sets, it follows that even in the presence
+ofS stragglers, the admin still receives the evaluations of g at
+an information set I for RMq(d,m ). As a result, the admin
+can compute the answer A by evaluating g atI.
+This information super-set based scheme has download
+cost D equal to the dimension of RMq(d,m ), an improve-
+ment over the trivial scheme that requires a download cost
+ofD =qm. In terms of number of workers needed, the above
+scheme using information super-sets needs N =L(q,d,m,S )
+workers, where L(q,d,m,S ) is the minimum size of an S-
+information super-set forRMq(d,m ), while the trivial scheme
+requiresN = (S+1)D workers. Refer to [17] for details about
+constructions and bounds on information super-sets for Reed-
+Muller codes, which further improve over the trivial scheme.
+V. M AIN RESULTS
+In this section, we provide a leakage and achievability the-
+orem for ICC (see Definition 1) code-based polynomial com-
+putation. We consider the linear encoding of non-uniformly
+distributed data for a distributed computation of a polynomial
+using information super-sets for Reed-Muller codes as given
+in Sec. IV-B. Specifically, we bound the information leakage
+from any subset of size 1≤ r < nof the non-uniform data
+X to the untrusted admin and workers observing the encoded
+data ˜X. We show this information leakage is negligible while
+the user can reliably decode the computation performed by the
+workers.
+Theorem 1. Let X∈ Fn
+q be a non-uniform random variable
+with distribution pX, let a >1, let p≥ 2 be an integer, and
+let ϵ > 0. Consider a scheme in which X is encoded using
+an (n,q,r,d,S ) Code-Based Polynomial Computation scheme
+as in Sec. IV-B, with key of size m, and a linear code C =
+[n,m ]q with a generator matrix G∈ Fm×n
+q chosen uniformly
+as random. If
+m≥n +p + logq (1/ϵ)−Hp(X) + max
+R
+Hp(XR),
+then with probability at least 1− 1
+a, the encoding ˜X =X+KG
+satisfies ICC, i.e., I( ˜X;XR)≤ϵc for everyR∈
+ [n]
+r
+
+, with
+ϵc = p
+p− 1 logq
+
+1 +a· 2
+2p−1
+p
+
+1 +q− maxR Hp(XR)
+
+ϵ
+1
+p
+
+,
+and the computation results can be reliably decoded by the
+user.
+The leakage proofs of Theorem 1 under variational distance
+and mutual information are provided in Sec. V-A and Sec. V-B,
+respectively, whereas the reliability of the scheme is a direct
+consequence of the proof given in [17]. The theorem states
+that when performing computation over a non-uniform random
+variable, ICC can be guaranteed with high probability using
+a randomly chosen linear code, provided that the key size is
+sufficiently large. The key size depends on the entropy of X,
+the amount of information leakage, the field size q, and the
+security parameter r.
+Example 1. Let ϵ = n−b and r > 1, and suppose that
+maxR(Hp(XR)) = r− 1 and Hp(X) = n− 1. Then, the
+key size should be at least m≥r +p +b logq(n). As n grows,
+b logq(n) becomes negligible compared to n. Additionally, for
+a constant r/n ratio, b logq(n) becomes negligible compared
+to r as n grows. We refer to Figs. 2a and 2b to illustrate
+the growth of the required key size, m, as a function of the
+information leakage ϵ (Fig. 2a), and the p-entropy of the data
+minR,z∈Frq (Hp(X|XR =z)) (Fig. 2b).
+A. Leakage Proof of Theorem 1 Under Variational Distance
+Let X ∈ Fn
+q be a random variable drawn from a non-
+uniform distribution pX over Fn
+q , i.e., X∼pX, and let Y ∼
+Unif(Fn
+q ). We encode X using a random key K∼ Unif(Fm
+q )
+and a uniformly random [n,m ]q linear code, defined by the
+generator matrix G∈ Fm×n
+q , i.e., ˜X =X +K·G.
+We start by bounding V(p ˜X|XR=z,p ˜X ) for any R∈
+ [n]
+r
+
+and anyz∈ Fr
+q, where V(·,·) denotes variational distance. For
+
+===== PAGE 5 =====
+
+a fixedR∈
+ [n]
+r
+
+and a fixed z∈ Fr
+q, the triangle inequality
+implies that
+V
+
+p ˜X|XR=z,p ˜X
+
+≤ V
+
+p ˜X|XR=z,p Y
+
++ V (p ˜X,p Y ). (1)
+Therefore, to bound the variational distance, we require ˜X and
+˜X|XR =z to be close to being uniformly distributed. Thus,
+we require the generator matrix G to perform smoothing of
+the distributions X andX|XR =z as defined in Definition 2.
+Let ϵ> 0 (see Remark 2) be some negligible number, and
+letp≥ 2 be some positive integer. According to [22, Thm. 3.1,
+Lem. 3.6], if
+m≥n +p + logq
+ 1
+ϵ
+
+−Hp(X|XR =z), (2)
+then the expectation of the p-variational distance ( Vp(·,·))
+between ˜X|XR =z and Y , taken over all uniformly random
+linear codes C = [n,m ]q, satisfies
+E
+h
+Vp
+
+p ˜X|XR=z,p Y
+i
+≤ 2
+p−1
+p ((1 +ϵ)p− 1)
+1
+p . (3)
+That is, for a fixed R∈
+ [n]
+r
+
+, a fixed z∈ Fr
+q, and a key
+size m upholding (2), there exists a linear code C = [n,m ]q
+defined by a generator matrix G∈ Fm×n
+q s.t.
+Vp
+
+p ˜X|XR=z,p Y
+
+≤ 2
+p−1
+p ((1 +ϵ)p− 1)
+1
+p . (4)
+Therefore, to ensure (4) for everyR∈
+ [n]
+r
+
+and everyz∈ Fr
+q,
+we require
+m≥ max
+R,z∈Frq
+
+n +p + logq
+ 1
+ϵ
+
+−Hp(X|XR =z)
+
+=n +p + logq
+ 1
+ϵ
+
+− min
+R,z∈Frq
+(Hp(X|XR =z))
+(a)
+≥ n +p + logq
+ 1
+ϵ
+
+−Hp(X) + max
+R
+Hp(XR)
+(b)
+= n +p + logq
+ 1
+ϵ′
+
+−Hp(X), (5)
+where (a) is shown in [37, Appendix B], and (b) follows by
+denoting ϵ′ =ϵq− maxR Hp(XR).
+Sincem is lower bounded by (5), the chosen random linear
+code C ensures that the distribution of ˜X is nearly uniform
+over Fn
+q as well. Thus, we have
+Vp (p ˜X,p Y )≤ 2
+p−1
+p ((1 +ϵ′)p− 1)
+1
+p . (6)
+Finally, since V(·,·)≤ Vp(·,·), we have that
+V
+
+p ˜X|XR=z,p Y
+
+≤ Vp
+
+p ˜X|XR=z,p Y
+
+, and (7)
+V (p ˜X,p Y )≤ Vp (p ˜X,p Y ). (8)
+Now, by applying (4), (6), (7), and (8) over (1), we have
+that everyR∈
+ [n]
+r
+
+and every z∈ Fr
+q satisfy
+V
+
+p ˜X|XR=z,p ˜X
+
+≤ 2
+p−1
+p
+h
+((1 +ϵ)p− 1)
+1
+p +
+ 
+(1 +ϵ′)p− 1
+ 1
+p
+i
+(a)
+≤ 2
+p−1
+p
+h
+2ϵ
+1
+p + 2ϵ′ 1
+p
+i
+= 2
+2p−1
+p
+
+1 +q− maxR Hp (XR )
+p
+
+ϵ
+1
+p, (9)
+where (a) follows since ϵ <1. The choice of ϵ affects both
+the size of the uniform key K ∈ Fm
+q and the amount of
+information leakage due to the non-uniformity of X. Now,
+for m that satisfies (5), and for a> 1, denote
+E =
+n
+C : V
+
+p ˜X|XR=z,pY
+
+≤a· 2
+p−1
+p ((1 +ϵ)p− 1)
+1
+p ,∀z,R
+o
+.
+Further, notice that for R′,z′ =
+arg maxR,z maxC∈E V
+
+p ˜X|XR=z
+,p Y
+
+we have that E
+can be written as
+E =
+n
+C : V
+
+p ˜X|XR′ =z′,pY
+
+≤a· 2
+p−1
+p ((1 +ϵ)p− 1)
+1
+p
+o
+.
+Thus, from (3), (5), (7), and Markov’s inequality, we obtain
+Pr [E]≥ 1− 1
+a. That is, by choosing appropriate m and a,
+with probability at least 1− 1/a, a randomly chosen linear
+code C = [n,m ]q satisfies
+V
+
+p ˜X|XR=z,p ˜X
+
+≤a· 2
+2p−1
+p
+
+1 +q−
+maxR Hp (XR )
+p
+
+ϵ
+1
+p
+(10)
+for all z∈ Fr
+q and allR∈
+ [n]
+r
+
+.
+B. Leakage Proof of Theorem 1 Under Mutual Information
+In this section, we demonstrate that the mutual information
+between ˜X and XR is negligible for all R, thereby ensuring
+that the proposed protocol satisfies the ICC conditions (Defi-
+nition 1). This is established using the equivalence between
+p-total variation and p-KL Divergence, as shown in [22,
+Prop. 2.1].
+First, we denote by δ =a· 2
+2p−1
+p
+
+1 +q−
+maxR Hp (XR )
+p
+
+ϵ
+1
+p .
+Directly applying [22, Prop 2.1] (see [37, eq. (12)]) on (10)
+gives us that every R∈
+ [n]
+r
+
+and every z∈ Fr
+q satisfy
+Dp
+
+p ˜X|XR=z||p ˜X
+
+≤ p
+p− 1 logq(1 +δ). (11)
+To bound I( ˜X;XR), recall the equivalence
+between the mutual information and KL-
+Divergence: I( ˜X;XR) = D
+
+p ˜X,XR
+||p ˜XpXR
+
+. Since
+D
+
+p ˜X,XR
+||p ˜XpXR
+
+≤ Dp
+
+p ˜X,XR
+||p ˜XpXR
+
+, we focus on
+bounding Dp
+
+p ˜X,XR
+||p ˜XpXR
+
+as follows
+Dp
+
+p ˜X,XR||p ˜XpXR
+
+(a)
+= 1
+p− 1 logq
+ X
+˜x,z
+pp
+˜X,XR
+(˜x,z )p−(p−1)
+˜X (˜x)p−(p−1)
+XR (z)
+!
+(b)
+= 1
+p− 1 logq
+ X
+z
+pXR (z)
+X
+˜x
+pp
+˜X|XR
+(˜x|z)p−(p−1)
+˜X (˜x)
+!
+(c)
+= 1
+p− 1 logq
+ X
+z
+pXR (z)q
+(p−1)Dp
+
+p ˜X|XR =z||p ˜X
+!
+(d)
+≤ 1
+p− 1 logq
+ X
+z
+pXR (z)qp logq (1+δ)
+!
+= p
+p− 1 logq(1 +δ),
+where (a), (b), and (c) follow from the definition of Dp(·||·),
+and (d) follows from (11). Thus, using the equivalence be-
+tween mutual information and KL-Divergence, as well as
+the relation D(·||·) ≤ Dp(·||·), we obtain I( ˜X;XR) ≤
+p
+p−1 logq(1 + δ) for all R, and hence ICC in Theorem 1 is
+satisfied.
+
+===== PAGE 6 =====
+
+REFERENCES
+[1] P. Cuff and L. Yu, “Differential privacy as a mutual information
+constraint,” in Proceedings of the 2016 ACM SIGSAC Conference on
+Computer and Communications Security , 2016, pp. 43–54.
+[2] I. Mironov, O. Pandey, O. Reingold, and S. Vadhan, “Computational
+differential privacy,” in Annual International Cryptology Conference .
+Springer, 2009, pp. 126–142.
+[3] Z. Huang, R. Hu, Y . Guo, E. Chan-Tin, and Y . Gong, “DP-ADMM:
+ADMM-based distributed learning with differential privacy,” IEEE
+Transactions on Information Forensics and Security , vol. 15, pp. 1002–
+1012, 2019.
+[4] T. Li and N. Li, “On the tradeoff between privacy and utility in data
+publishing,” in Proceedings of the 15th ACM SIGKDD international
+conference on Knowledge discovery and data mining , 2009, pp. 517–
+526.
+[5] Y . Wang, Y . O. Basciftci, and P. Ishwar, “Privacy-utility tradeoffs under
+constrained data release mechanisms,” arXiv preprint arXiv:1710.09295,
+2017.
+[6] F. P. Calmon, A. Makhdoumi, and M. Médard, “Fundamental limits of
+perfect privacy,” in 2015 IEEE International Symposium on Information
+Theory (ISIT). IEEE, 2015, pp. 1796–1800.
+[7] B. Rassouli and D. Gündüz, “On perfect privacy and maximal correla-
+tion,” arXiv preprint arXiv:1712.08500 , vol. 2, no. 3, 2017.
+[8] ——, “On perfect privacy,” IEEE Journal on Selected Areas in Infor-
+mation Theory, vol. 2, no. 1, pp. 177–191, 2021.
+[9] D. P. Mulligan, G. Petri, N. Spinale, G. Stockwell, and H. J. Vincent,
+“Confidential computing—a brave new world,” in 2021 international
+symposium on secure and private execution environment design (SEED).
+IEEE, 2021, pp. 132–138.
+[10] G. D. Hunt, R. Pai, M. V . Le, H. Jamjoom, S. Bhattiprolu, R. Boivie,
+L. Dufour, B. Frey, M. Kapur, K. A. Goldman et al. , “Confidential
+computing for openpower,” in Proceedings of the Sixteenth European
+Conference on Computer Systems , 2021, pp. 294–310.
+[11] D. Feng, Y . Qin, W. Feng, W. Li, K. Shang, and H. Ma, “Survey
+of research on confidential computing,” IET Communications , vol. 18,
+no. 9, pp. 535–556, 2024.
+[12] N. Raviv and Z. Goldfeld, “Perfect subset privacy for data sharing and
+learning,” in 2022 IEEE International Symposium on Information Theory
+(ISIT). IEEE, 2022, pp. 1850–1855.
+[13] K. Lee, M. Lam, R. Pedarsani, D. Papailiopoulos, and K. Ramchandran,
+“Speeding up distributed machine learning using codes,” IEEE Trans-
+actions on Information Theory , vol. 64, no. 3, pp. 1514–1529, 2017.
+[14] Q. Yu, S. Li, N. Raviv, S. M. M. Kalan, M. Soltanolkotabi, and S. A.
+Avestimehr, “Lagrange coded computing: Optimal design for resiliency,
+security, and privacy,” inThe 22nd International Conference on Artificial
+Intelligence and Statistics . PMLR, 2019, pp. 1215–1225.
+[15] R. G. D’Oliveira, S. El Rouayheb, and D. Karpuk, “GASP codes
+for secure distributed matrix multiplication,” IEEE Transactions on
+Information Theory, vol. 66, no. 7, pp. 4038–4050, 2020.
+[16] C. Wang and N. Raviv, “Breaking blockchain’s communication barrier
+with coded computation,” IEEE Journal on Selected Areas in Informa-
+tion Theory, vol. 3, no. 2, pp. 405–421, 2022.
+[17] Z. Deng, V . Ramkumar, and N. Raviv, “Perfect subset privacy in
+polynomial computation,” in 2024 IEEE International Symposium on
+Information Theory (ISIT) . IEEE, 2024, pp. 933–938.
+[18] S. Tarnopolsky and A. Cohen, “Coding-based hybrid post-quantum
+cryptosystem for non-uniform information,” in 2024 IEEE International
+Symposium on Information Theory (ISIT) , 2024, pp. 1830–1835.
+[19] M. Bellare, A. Desai, D. Pointcheval, and P. Rogaway, “Relations among
+notions of security for public-key encryption schemes,” in Advances in
+Cryptology—CRYPTO’98: 18th Annual International Cryptology Con-
+ference Santa Barbara, California, USA August 23–27, 1998 Proceed-
+ings 18. Springer, 1998, pp. 26–45.
+[20] Wikipedia contributors, “Ciphertext indistinguishability — Wikipedia,
+the free encyclopedia,” 2024, [Online; accessed September
+2024]. [Online]. Available: https://en.wikipedia.org/wiki/Ciphertext_
+indistinguishability
+[21] ——, “Negligible function — Wikipedia, the free encyclopedia,”
+2024, [Online; accessed December 2024]. [Online]. Available: https:
+//en.wikipedia.org/wiki/Negligible_function
+[22] M. Pathegama and A. Barg, “R\’enyi divergence guarantees for hashing
+with linear codes,” arXiv preprint arXiv:2405.04406 , 2024.
+[23] C. E. Shannon, “Communication theory of secrecy systems,” Bell system
+technical journal, vol. 28, no. 4, pp. 656–715, 1949.
+[24] M. Bloch and J. Barros, Physical-Layer Security: From Information
+Theory to Security Engineering . Cambridge University Press, 2011.
+[25] L. H. Ozarow and A. D. Wyner, “Wire-tap channel ii,” in Advances in
+Cryptology. Springer, 1985, pp. 33–50.
+[26] A. Carleial and M. Hellman, “A note on wyner’s wiretap channel
+(corresp.),” IEEE Transactions on Information Theory , vol. 23, no. 3,
+pp. 387–390, 1977.
+[27] K. Bhattad, K. R. Narayanan et al. , “Weakly secure network coding,”
+NetCod, Apr, vol. 104, pp. 8–20, 2005.
+[28] A. Cohen, A. Cohen, M. Medard, and O. Gurewitz, “Secure multi-source
+multicast,” IEEE Transactions on Communications , vol. 67, no. 1, pp.
+708–723, 2018.
+[29] R. Matsumoto and M. Hayashi, “Universal secure multiplex network
+coding with dependent and non-uniform messages,” IEEE Transactions
+on Inf. Theory , vol. 63, no. 6, pp. 3773–3782, 2017.
+[30] J. Sevilla, L. Heim, A. Ho, T. Besiroglu, M. Hobbhahn, and P. Villalobos,
+“Compute trends across three eras of machine learning,” in 2022
+International Joint Conference on Neural Networks (IJCNN) . IEEE,
+2022, pp. 1–8.
+[31] M. Egger, R. Bitar, A. Wachter-Zeh, and D. Gündüz, “Efficient dis-
+tributed machine learning via combinatorial multi-armed bandits,” in
+2022 IEEE International Symposium on Information Theory (ISIT) .
+IEEE, 2022, pp. 1653–1658.
+[32] M. Xhemrishi, A. G. i Amat, E. Rosnes, and A. Wachter-Zeh, “Compu-
+tational code-based privacy in coded federated learning,” in 2022 IEEE
+International Symposium on Information Theory (ISIT) . IEEE, 2022,
+pp. 2034–2039.
+[33] C. Dwork, “Differential privacy,” in International colloquium on au-
+tomata, languages, and programming . Springer, 2006, pp. 1–12.
+[34] B. Rassouli, F. E. Rosas, and D. Gündüz, “Data disclosure under
+perfect sample privacy,” IEEE Transactions on Information Forensics
+and Security, vol. 15, pp. 2012–2025, 2019.
+[35] D. Micciancio and O. Regev, “Worst-case to average-case reductions
+based on gaussian measures,” SIAM Journal on Computing , vol. 37,
+no. 1, pp. 267–302, 2007.
+[36] T. Debris-Alazard, L. Ducas, N. Resch, and J.-P. Tillich, “Smoothing
+codes and lattices: Systematic study and new bounds,” IEEE Transac-
+tions on Information Theory , vol. 69, no. 9, pp. 6006–6027, 2023.
+[37] S. Tarnopolsky, Z. Deng, V . Ramkumar, N. Raviv, and A. Cohen,
+“Individual confidential computing of polynomials over non-
+uniform information,” https://drive.google.com/drive/folders/
+1pw1ln2emJ5leEHb1_WKcv9IdRtb6-fOj?usp=sharing, 2025.
+[38] R. A. Chou, B. N. Vellambi, M. R. Bloch, and J. Kliewer, “Coding
+schemes for achieving strong secrecy at negligible cost,” IEEE Trans-
+actions on Information Theory , vol. 63, no. 3, pp. 1858–1873, 2017.
+[39] S. Kullback, “A lower bound for discrimination information in terms
+of variation (corresp.),” IEEE Trans. on Inf. Theory , vol. 13, no. 1, pp.
+126–127, 1967.
+
+===== PAGE 7 =====
+
+APPENDIX A
+SMOOTHING
+In this paper, we utilize smoothing of distributions [35], [36]
+as a method to achieve perfect subset privacy for non-uniform
+information. Smoothing of distributions is used as a technique
+to transform some non-uniform random variable X∈ Fn
+q into
+an almost uniform one.
+We now introduce several useful information metrics that
+are utilized throughout this paper to measure distances be-
+tween probability distributions. Let p1 and p2 be two distinct
+distributions over Fn
+q . First, we consider the variational dis-
+tance and the p-variational distance for p∈ N, p≥ 2, defined
+between p1 and p2 as follows, and defined as follows
+V(p1,p 2) =
+X
+x∈Fnq
+|p1(x)−p2(x)|,
+Vp(p1,p 2) = qn
+
+ 1
+qn
+X
+x∈Fnq
+|p1(x)−p2(x)|p
+
+
+1
+p
+,
+where V(·,·) is the variational distance and Vp(·,·) is the p-
+variational distance. Since convergence in ℓp is stronger than
+convergence in ℓ1, we get V(·,·)≤ Vp(·,·).
+Another information metric considered in this paper is the
+KL-Divergence, along with the p-KL-Divergence for p∈ N,
+p≥ 2, which are defined as
+D(p1||p2) =
+X
+x∈Fnq
+p1(x) logq
+p1(x)
+p2(x),
+Dp(p1||p2) = 1
+p− 1 logq
+
+X
+x∈Fnq
+pp
+1(x)p−(p−1)
+2 (x)
+
+,
+where D(·||·) is the KL-Divergence and Dp(·||·) is the p-KL-
+Divergence. Extending this notation to entropy, we have the
+following definition for p-entropy of the random variable X
+Hp(X) = 1
+p− 1 logq
+
+X
+x∈Fnq
+pp(x)
+
+.
+We note that p-entropy is a decreasing function of p,
+whereas p-KL-Divergence is an increasing function of p.
+Both p-variational distance and p-KL Divergence are met-
+rics often used to quantify information leakage [24], [38]. For
+p = 1, the relation between the two metrics is defined by the
+Pinsker inequality [39] as V(p1,p 2)≤
+q
+1
+2 D(p1||p2).
+That is, if the KL-Divergence between two distributions is
+bounded, then the variational distance between them can also
+be bounded, but the other direction is not necessarily true.
+However, in [22, Prop. 2.1] a two-way relation between the
+two metrics is introduced for p≥ 2. More specifically, it is
+shown that
+Vp(p1,p 2)≤δ⇒ Dp(p1||p2)≤ p
+p− 1 logq(1 +δ). (12)
+In this paper, we consider smoothing of distributions using
+random linear codes (Definition 2). Thus, the encoding ˜X =
+X +C, where C is chosen uniformly from C, generates a
+random variable ˜X that is nearly uniformly distributed over
+Fn
+q .
+In [22], Panthegama et. al. provide the conditions and en-
+coding for which a random linear code can perform smoothing
+on a non-uniform variable [22, Thm. 3.1]. The theorem states
+that there exists a random linear code C = [n,m ]q with a
+generator matrix G∈ Fm×n
+q for which applying the linear
+transformation ˜X = X +KG on the non-uniform random
+variable X∈ Fn
+q using a random key K∼ Unif(Fm
+q ) results
+in a nearly uniformly distributed random variable ˜X ∈ Fn
+q .
+Specifically, the theorem asserts that for integer p ≥ 2
+and negligible ϵ > 0, taking m larger than a function of
+n,p, logq(1/ϵ), and Hp(X) ensures the existence of a linear
+code C = [n,m ]q s.t. the p-variational distance between the
+distributions pX and p ˜X is
+Vp(p ˜X,p Un )≤ 2
+p−1
+p ((1 +ϵ)p− 1)
+1
+p.
+We apply this result within the context of ICC (Defini-
+tion 1). ICC quantifies information leakage through mutual
+information I( ˜X;XR), and requires this term to be bounded
+by some negligible value for all R ∈
+ [n]
+r
+
+, where
+ [n]
+r
+
+is
+the collection of all subsets of size 1≤ r < n. We recall
+that mutual information is equivalent to KL-Divergence, i.e.,
+I( ˜X;XR) = D(p ˜X,XR
+||p ˜XpXR ). Additionally, we recall that
+for the mutual information between two random variables
+(or the KL-divergence between two distributions) to approach
+zero, the random variables need to be almost independent of
+each other. In terms of variational distance, this requirement
+is equivalent to requiring that the variational distance between
+the distributions p ˜X and p ˜X|XR
+be negligible. In Sec. V-A
+and V-B, smoothing and [22, Thm. 3.1] are utilized to make the
+required distributions nearly uniform, i.e., make V(p ˜X,p Un )
+and V(pXR,p Un ) negligible, where pUn is the uniform distri-
+bution overF n
+q . Hence, the distributionsp ˜X andpXR are close
+to each other as well, which in turn ensures negligible leakage
+and satisfaction of ICC conditions. In Sec. V-B this result is
+expanded to the mutual information I( ˜X,XR) as well.
+APPENDIX B
+INEQUALITY PROOF
+In this section, we prove inequality (a) of (5) in Sec. V-A.
+We denote by v = n− r and V = RC, as well as
+p(x) ≜ pX (X = x), p(z) ≜ pXR (XR = z) and p(y|z) ≜
+pXV|XR=z(XV = y|XR = z), where x∈ Fn
+q , z∈ Fr
+q, and
+y∈ Fv
+q.
+First, we consider the following bound for a fixedR∈
+ [n]
+r
+
+.
+Hp(X)−Hp(XR)− min
+z
+(Hp(X|XR =z))
+(a)
+= 1
+1−p
+
+logq
+
+X
+x∈Fnq
+pp(x)
+
+− logq
+
+X
+z∈Frq
+pp(z)
+
+
+
+
+− min
+z
+(Hp(X|XR =z))
+= 1
+p− 1 logq
+ P
+z∈Frq
+pp(z)
+P
+x∈Fn
+q
+pp(x)
+!
+− min
+z
+(Hp(X|XR =z))
+
+===== PAGE 8 =====
+
+= 1
+p− 1 logq
+ P
+z∈Frq
+pp(z)
+P
+z∈Frq
+pp(z)P
+y∈Fvq
+pp(y|z)
+!
+− min
+z
+(Hp(X|XR =z))
+(b)
+= 1
+p− 1 logq
+ P
+z∈Frq
+pp(z)
+P
+z∈Frq
+pp(z)P
+y∈Fv
+q
+pp(y|z)
+!
+− min
+z
+ 
+1
+p− 1 logq
+ 
+1P
+y∈Fvq
+pp(y|z)
+!!
+(c)
+= 1
+p− 1 logq
+ P
+z∈Frq
+pp(z)
+P
+z∈Frq
+pp(z)P
+y∈Fvq
+pp(y|z)
+!
+− 1
+p− 1 logq
+ 
+1P
+y∈Fvq
+pp(y|z′)
+!
+= 1
+p− 1 logq
+ P
+z∈Frq
+pp(z)P
+y∈Fvq
+pp(y|z′)
+P
+z∈Frq
+pp(z)P
+y∈Fvq
+pp(y|z)
+!
+(d)
+≥ 0,
+where (a) and (b) follow from the definition of Hp(·)
+(Sec. IV-A), and (c) follows by setting z′ as the minimizer
+of minz∈Frq (Hp(X|XR =z)) for a fixed R∈
+ [n]
+r
+
+. Since z′
+is defined as a minimizer, and since logq(·) is a monotonically
+increasing function, it follows thatz′ maximizes the expressionP
+y∈Fvq
+pp(y|z) over all z∈ Fr
+q. Thus we have inequality (d),
+which is a result of the logarithmic argument being greater
+than one. That is, we have shown that for a fixed R∈
+ [n]
+r
+
+,
+Hp(X)−Hp(XR)≥ min
+z
+(Hp(X|XR =z)). (13)
+Now, we minimize both sides over all R∈
+ [n]
+r
+
+. On the left
+side we obtain
+min
+R∈(
+[n]
+r )
+(Hp(X)−Hp(XR)) = Hp(X)− max
+R∈(
+[n]
+r )
+(Hp(XR)).
+(14)
+Finally, using (13) and (14), we have that
+Hp(X)− max
+R∈(
+[n]
+r )
+(Hp(XR))
+≥ min
+R∈(
+[n]
+r ),z∈Frq
+(Hp(X|XR =z)). (15)

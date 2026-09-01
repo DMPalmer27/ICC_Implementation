@@ -1,0 +1,689 @@
+
+===== PAGE 1 =====
+
+Simplified Implementation of
+Individual Confidential Computing
+of Polynomials over Non-Uniform
+Information [1]
+Advised by Netanel Raviv
+Daniel Palmer
+Spring 2026 Independent Study Final Report
+May 6, 2026
+
+===== PAGE 2 =====
+
+Contents i
+Contents
+1 Introduction 1
+2 Background 1
+2.1 Motivation for the ICC Scheme . . . . . . . . . . . . . . . . . . . . . . . 1
+2.2 Perfect Subset Privacy . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3
+2.3 Polynomial Computation with Perfect Subset Privacy . . . . . . . . . . . 3
+2.4 ICC: Extension to Non-Uniform Data . . . . . . . . . . . . . . . . . . . . 5
+3 2024 (Uniform) Implementation 6
+3.1 System Architecture . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+3.2 Client Design . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+3.3 Server Design . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+3.4 Worker Design . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+3.5 Testing . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+4 Adapting to Full ICC 10
+4.1 Shifting from Reed Solomon to Random Linear Code . . . . . . . . . . . 10
+4.2 Entropy Calculation and Derivation of Key Size . . . . . . . . . . . . . . 10
+4.3 Information Set Enumeration at Scale . . . . . . . . . . . . . . . . . . . . 12
+4.4 Testing . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 12
+5 Further Work 17
+5.1 Straggler Resilience via Information Super-Sets . . . . . . . . . . . . . . 17
+5.2 Case Study . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18
+References 19
+
+===== PAGE 3 =====
+
+2 Background 1
+1 Introduction
+I am an undergraduate BS/MS student studying Computer Science who wants to get
+research experience before figuring out my post-graduation path. After taking Professor
+Raviv’s Introduction to Machine Learning and then Coding and Information Theory
+classes, I strongly resonated with his work and wanted to pursue research with him.
+Through discussion of my interests and the time that I have for my project, he suggested
+that I create a concrete implementation of the scheme described in his recent paper
+Individual Confidential Computing of Polynomials over Non-Uniform Information [1].
+This would bridge my experience/interest in machine learning with information theory
+that fit what I wanted out of a research project. I started this project in January 2026
+with the plan that I would develop it over the next year and a half into my master’s
+thesis.
+We discussed how I would divide this work so that I could have a reasonable goal for
+what I would have finished this semester for my Independent Study. We concluded that
+my work this semester should produce a concrete, simplified toy example of the scheme
+that proves it is works, which I will then build out over the next year to be fully robust.
+Specifically, the key simplification that I am making is I am not considering straggler
+tolerance. Further, I am using small, randomly generated data with small parameters
+such that I can run and test this scheme solely on my personal computer. I look forward
+to further developing this project over the next year.
+2 Background
+2.1 Motivation for the ICC Scheme
+The proliferation of artificial intelligence and machine learning has fundamentally
+transformed how data is handled. As model complexity and dataset scale continue to
+grow, the computational demands have exceeded the infrastructure available to all but the
+largest institutions. This has driven heavy reliance upon cloud computing services such
+as Amazon Web Services, Microsoft Azure, and Google Cloud, for example, which offer
+on-demand access to powerful computation power at a fraction of the cost of building
+equivalent infrastructure. For many smaller companies and research institutions, such
+
+===== PAGE 4 =====
+
+2 Background 2
+services are not just convenient but required to remain competitive.
+Unfortunately, this reliance on external computation introduces tension regarding
+data privacy. Using cloud computing generally requires uploading the raw dataset to
+the service provider, exposing the data to an entity outside of the user’s control. For
+organizations constrained by regulations such as HIPAA, or those whose competition
+depends on their data being confidential, this exposure may be unacceptable. The result
+is that privacy sensitive organizations are systematically excluded from the computational
+resources that would allow them to take advantage of modern AI efficiency. Thus, there
+is need for secure ways to use cloud computing to democratize the space.
+The natural response is to encrypt the data before uploading it, and significant re-
+search has gone towards analyzing just this. The standard approach, homomorphic en-
+cryption (HE), instead incurs massive overhead and does not allow common learning
+algorithms to be performed directly on the encrypted data [2]. Further, HE uses com-
+putational rather than information-theoretic privacy guarantees. The scheme that I am
+implementing takes an alternative approach grounded in information-theoretic security.
+The goal is to encode data using a short random key such that the encoded version
+provably leaks no information about any small subset of the original data, regardless
+of the computational power of the adversary. This guarantee is formalized through the
+notion of perfect subset privacy (PSP), which ensures zero mutual information between
+the encoded data and anyr-element subset of the original whereris a tunable security
+parameter. This notion of PSP kickstarted the line of three papers, each building off
+of the last, which result in my implementation. Information-theoretic guarantees of the
+kind that PSP gives are strictly stronger than the computational ones such as HE. They
+hold unconditionally, without any assumption about the adversary’s resources.
+Within this information-theoretic framework, prior work on privacy in distributed
+computation has focused on protecting data held by the system administrator from ad-
+versarial worker nodes inside the service provider. Crucially, this assumes that the system
+administrator is fully trusted. This is problematic when the user wants privacy against
+the entire service provider.
+The scheme implemented in this project, introduced in [3] and extended to non-
+uniform data in [1], addresses this gap by shifting the privacy barrier from the boundary
+between the administrator and its workers to the boundary between the user and the
+
+===== PAGE 5 =====
+
+2 Background 3
+Figure 1: Updated Scheme Privacy Barrier vs Existing Privacy Barrier [3]
+service provider as a whole. This shift is illustrated in Figure 1.
+2.2 Perfect Subset Privacy
+The foundational privacy notion this project relies on is PSP as previously mentioned.
+It is defined as follows: consider a user holding datax= (x 1,...,x n)∈F n
+q .xis encoded
+into ˜xby a privatization scheme. Rather than requiring that ˜xreveals nothing about
+xin its entirety (which would be useless because the privatized data could not be used
+for inference on the real data), PSP instead requires that ˜xreveals nothing about any
+r-subset ofx.
+For a fixedr∈[n], an encoding procedure satisfies r-subset privacy if:
+I(XR; ˜X) = 0∀R∈
+[n]
+r
+
+The parameterris tunable: largerrgives stronger privacy protection at the cost of
+a larger key [2].
+2.3 Polynomial Computation with Perfect Subset Privacy
+Deng, Ramukar, and Raviv [3] use PSP to develop an encoding scheme achieving PSP.
+This scheme is straightforward. Let ˜x≜x+kGwherek∼Unif(F m
+q ) andG∈F m×n
+q is the
+generator matrix of a linear codeCwhose dual codeC ⊥ satisfiesd min(C⊥)≥r+ 1 where
+dmin is the minimum hamming distance. This condition ensures that everyrcolumns of
+Gare linearly independent which makes the privacy proof work.
+The key sizemis bounded byrvia the Singleton bound. This bound is tight as
+
+===== PAGE 6 =====
+
+2 Background 4
+equality can be achieved by takingCto be a Maximum Distance Separable (MDS)
+code which achievesm=r. In particular, Reed-Solomon codes with Vandermonde
+generator matrices achieve this optimum and this is the generator matrix that I used
+when implementing the uniform scheme.
+After data storage, the user wants to calculate a polynomialf(x) which is a mul-
+tivariate polynomialf:F n
+q →F q of total degree at mostdand individual degree at
+mostq−1. The key to keeping the computation identical while preserving privacy is
+defining a new polynomialg:F n
+q →F q asg(t)≜f(˜x−tG)∀t∈F m
+q . Crucially, this
+givesg(k) =f(˜x−kG) =f(x+kG−kG) =f(x). So, recoveringf(x) is nothing beyond
+evaluating the polynomialgat at the keyk. This means that the service provider gets
+the evaluations ofgat a set of points and returns these to the user who interpolates to
+getgand evaluateg(k).
+Considering what evaluation points to take is incredibly interesting. The paper uses
+Reed-Muller codes to optimize beyond the trivial answer of giving allq m evaluations.
+It uses information sets which are sets of points such that “any codeword can be recon-
+structed in full by observing its entries on the information set” [3]. An explicit information
+set for RMq(d,m) is given in Definition 3 asI d,m ≜{(α i1,...,α im)|Pm
+k=1ik≤d,0≤i k≤
+q−1}[3]. Becausegis a degree-dpolynomial inmvariables, knowingg’s evaluations at
+an information set is enough to interpolate all ofg.
+If I were to be incorporating straggler tolerance into my scheme then this simple infor-
+mation set would be insufficient because it requires all evaluation points to be returned.
+The paper combats stragglers through a new tool: an information super-set which is a
+multiset that is resilient againstSstragglers because any subset of the multiset without
+Selements is a complete information set. However, because I am making the simplifica-
+tion that I am not considering stragglers currently, the simple information set given in
+Definition 3 is sufficient.
+In one paragraph, the scheme proceeds as follows. In the storage phase the user
+uploads ˜x=x+kGand the server distributes{˜x−tG|t∈I d,m}to worker nodes. In the
+computation phase, the user sendsfto the administrator, workers evaluatefon their
+data and return results, and the administrator sendsA={f(˜x−tG)} t∈Id,m. The user
+solves a linear system in order to interpolateg, evaluates it atk, and obtainsf(x).
+The full ICC scheme [1] builds directly off of this setting so I decided it would be the
+
+===== PAGE 7 =====
+
+2 Background 5
+best place to begin my implementation. I started by building a complete toy implemen-
+tation (again not considering stragglers) of this scheme described in [3]. I then built off
+of it to realize the full ICC scheme.
+2.4 ICC: Extension to Non-Uniform Data
+The scheme of [3] assumes that the user’s dataxis uniformly distributed overF n
+q .
+For real datasets this almost never holds and the privacy proof breaks down without it.
+Tarnopolsky et al. [1] identify that this is true because achieving zero leakage for non-
+uniformxrequires a key whose entropy matches that of the data which would nullify
+the storage benefits of keeping a key instead ofx. They instead target negligible leakage
+whereI(X R; ˜X)≤ε c for negligibleε c.
+The central tool is distribution smoothing. Intuitively, if the encoding ˜x=x+kG
+can produce an output that is nearly uniformly distribute regardless of the distribution
+ofx, then the privacy argument from the uniform case carries through approximately.
+The key tool isp-entropy which is defined for a random variableX∈F m
+q andp≥2 as
+Hp(X) = 1
+1−p logq(P
+x∈Fnq
+pp(x)). If this quantity is high thenXcarries much uncertainty
+(e.g. more uniform) while if this quantity is low thenXis less uniform.
+The key result (Theorem 1) is that a randomly chosen generator matrixG∈F m×n
+q (as
+opposed to a structured generator matrix of an MDS code as in [3]) performs smoothing
+providedmis large enough relative to the system parameters andp-entropy of the data.
+This gives the following theorem for the size of the keyk,m≥n+p+ log q( 1
+ε)−H p(X) +
+maxRHp(XR). Taking such anmgives, with probability at least 1− 1
+a, the encoding
+˜X=X+kGsatisfiesI( ˜X;X r)≤ε c ∀R∈
+ [n]
+r
+
+whereε c is a closed-form quantity
+depending ona,p,q,ε,and max RHp(XR).
+The storage benefits of this can be seen by takingH p(X) as large as possible, which
+
+===== PAGE 8 =====
+
+3 2024 (Uniform) Implementation 6
+is realized whenXis uniform. UniformXgivesp X(x) = 1
+qn . So, this gives:
+Hp(X) = 1
+1−p logq(
+X
+x∈Fnq
+pp(x))
+= 1
+1−p logq(
+X
+x∈Fnq
+( 1
+qn )p)
+= 1
+1−p logq(qnq−np)
+= 1
+1−p logq(qn(1−p))
+= 1
+1−p n(1−p)
+=n
+The same argument applies forH p(XR) =rwhenX R is uniform. So, the final value
+formis found inm≥n+p+ log q( 1
+ε)−n+r=p+r+ log q( 1
+ε). Thus, ifXis uniform,
+mdepends solely on instance parameters and not input size, which means the input size
+can be arbitrarily large without key size blowing up. So, this encoding scheme overcomes
+the storage problems when accepting negligible mutual information instead of zero. This
+comes at a cost, however, because this optimal construction only exists whenXis uniform
+and less-uniform distributions pushmlarger.
+The computation and decoding pipeline—theg(t)≜f(˜x−tG) construction, RM
+information set evaluation, and linear system solve—is inherited from [3] unchanged.
+The only modifications relative to the uniform scheme are the method of generating
+G, the procedure for computing the requiredm, and the utilities to track information
+leakage.
+3 2024 (Uniform) Implementation
+3.1 System Architecture
+The uniform scheme implementation models the three-party distributed system de-
+scribed in [3] as three Python classes:Client,Server, andWorker. A fourth class,
+SystemContext, acts as a parameter container passed to every component ensuring that
+the same parameters are used consistently across all parties. There is also a separate
+
+===== PAGE 9 =====
+
+3 2024 (Uniform) Implementation 7
+utilities file,utils.py, which contains general utilities for the scheme.
+TheSystemContextcontain 6 elements,q,n,m,d,andr.qis the field size,nis the
+data length,mis the key length,dis the maximum polynomial degree being computed
+over the data, andris the privacy parameter.
+One early obstacle I had to manage was computations over finite fields instead of
+real numbers. Standard Python arithmetic cannot be used. I found the galois library [4]
+which is a NumPy extension for Galois (finite) fields to be a perfect tool for this.
+3.2 Client Design
+TheClienthas three methods:encode data, evaluate monomials, anddecode result.
+It is responsible for encoding during the storage phase and decoding during the computa-
+tion phase. It keeps only the secret keykafter encoding which reflects the storage model
+of [3].
+TheClientconstructor takesSystemContextandGalois fieldobjects which are
+stored as attributes.
+Theencode datamethod implements Equation (1) of [3] directly. It takes as param-
+etersxwhich is the data andGwhich is the generator matrix being used to maskx.Gis a
+Vandermonde matrix which is constructed by the utility functiongeneratevandermonde G
+inutils.py. This function selects takes aGalois field (GF),mas the number
+of rows which is the key length, andnas the number of columns which is the data
+length as parameters. It then selectsndistinct, non-zero elementsα 1,...,α n∈F q and
+setsG i,j =α i+1
+j fori∈1,...,mandj∈1...,n. This produces a Reed-Solomon
+generator matrix which obtains the optimalm=rbound (the minimum possiblem
+constrained by the Singleton bound). Back toencode data, it first generateskwith
+self.GF.Random(self.context.m)which it stores as an attribute. It then calculates
+˜x=x+kGdirectly usingnumpy.matmuland returns ˜x.
+Thedecode resultmethod implements the interpolation step of the scheme and
+is the most mathematically involved aspect of the client. It takes as parameters the
+server resultsA={f(˜x−tG)} t∈Id,m and the points generating these results{t|t∈
+Id,m}. We know thatg(t) =f(˜x−tG) is a multivariate polynomial of total degree
+at mostdinmvariables. Because the client receives evaluations ofgat every point
+inI d,m, it follows from Lemma 2 of [3] that the coefficients ofgare uniquely deter-
+
+===== PAGE 10 =====
+
+3 2024 (Uniform) Implementation 8
+mined in the monomial basis. TheClientfirst gets the exponent tuples which are
+obtained by callingget information setinutils.py. This function builds the in-
+formation setI d,m given by Definition (3) in [3] by iterating over every combination
+initertools.product(range(context.q), repeat=m)and returning each combina-
+tion that satisfies the sum of the combination being at mostcontext.d. Letλbe
+the size of this information set (which follows from theλ(q,d,m) notation in [3]). For
+each pointtthatdecode resultis given, it builds the evaluation matrixM∈F λ×λ
+q
+where each row holds monomial evaluations fort. These evaluations are computed by
+evaluate monomialswhich iterates over each exponent tupleeand accumulates Q
+itei
+i
+over the field.Clientthen solves the systemMc=Ausingnumpy.linalg.solveto get
+the coefficient vectorcofg. Finally,Clientrecoversf(x) =g(k) by evaluatingkat the
+exponents with the same evaluate monomialsand then multiplying by the coefficients
+cand summing to get the final decoded answer.
+It is worth noting thatMis guaranteed to be invertible becauseI d,m is an information
+set which is the property that makes the linear system uniquely solvable.
+3.3 Server Design
+TheServerclass models the system administrator described in [3]. It has three
+methods:store data, get evaluation points, andcompute request. It is responsi-
+ble for receiving and distributing encoded data during the storage phase and coordinating
+polynomial evaluation over the workers during the computation phase.
+TheServerconstructor takesSystemContextandGalois field (GF)objects which
+are stored as attributes.
+Thestore datamethod takes both the generator matrixGand encoded data ˜xas
+parameters. It storesGas an attribute and then distributes ˜xto workers. The workers
+each receive an evaluation point which are generated by get evaluation pointswhich
+wraps the result fromget information setinGFbecause the server requires finite field
+arithmetic. These points are stored as an attribute to give back to theClientlater. For
+each evaluation pointt(member of the information setI d,m, the server distributes ˜x−tG
+wheretGis obtained by multiplyingtandGwithnumpy.matmulto aWorkerand stores
+the worker in aWorkerlist attribute. This is consistent with step (ii) of the scheme in [3].
+The server never has access toxorkdirectly, only ˜xandGwhich is consistent with the
+
+===== PAGE 11 =====
+
+3 2024 (Uniform) Implementation 9
+privacy model.
+Thecompute requestmethod is used in the computation phase and takes a poly-
+nomialf. Its core functionality is querying all of the workers for their evaluations of
+f. It aggregates these results and returns a tuple where the first element contains a list
+of evaluation points given to eachWorkerand the second element contains a list of the
+results. The client needs both evaluation points and results in order to build the decoding
+matrixM.
+3.4 Worker Design
+TheWorkerclass is intentionally very minimal. Each worker holds a single piece of
+shifted data ˜x−tGfort∈I d,m and has a single methodevaluate.
+TheWorkerconstructor takes the piece of shifted data and stores it as an attribute.
+Theevaluatemethod takes a polynomialfand returns its computation over the
+Worker’s shifted data.
+3.5 Testing
+The main file for the project contains a script that runs an instance of the scheme
+with random data. This script performs setup by initializing aSystemContextinstance
+with the parameters, creating a Galois fieldGF, initializing aClientandServerwith
+these parameters and field, generating random datax, and generating a Vandermonde
+matrixGto use for encoding. It then sendsxandGto the client to encode, receiving the
+encoded ˜x. It then defines the polynomial it wants calculated and sends this polynomial
+to the server to compute. It receives the pointst∈I d,m thatf(˜x−tG) was evaluated at
+along with their evaluations. It then sends these points and results back to the client to
+decode which returns the decoded answer. Finally, this script computes the polynomial
+over the actual data and compares to see if the scheme was successful.
+I ran this script with varying polynomials and parameter combinations and they were
+all successful. I am not going to list all of this out here because, due to the fact that the
+full ICC implementation inherits these classes and only changesGand the parameterm,
+I include all of these tests in my exhaustive testing below.
+
+===== PAGE 12 =====
+
+4 Adapting to Full ICC 10
+4 Adapting to Full ICC
+4.1 Shifting from Reed Solomon to Random Linear Code
+There are two key changes that have to be made when considering non-uniform data
+in the shift from the scheme in [3] to the scheme in [1]. The first of which is replacing
+the construction ofGfrom a Vandermonde matrix, which was chosen because it is the
+generator matrix of an MDS code (Reed-Solomon), with a generator matrix chosen uni-
+formly at random. This shift in code is straightforward, I created another utility function
+generate random Gwhich takes the same parameters asgenerate vandermonde Gand
+returns a randomly generatedm×narray usingGF.Random. The only other change is
+replacing the call togenerate vandermonde Gwithgenerate random G.
+4.2 Entropy Calculation and Derivation of Key Size
+The second key change is removingmas a free parameter of the system and instead
+deriving it from other parameters and the entropy of the data. The first amendment
+is changingSystemContext. In terms of free parameters, I removedmand addedp
+which is the value forp-entropy,epsilonwhich is the smoothing “budget” and controls
+how strict the smoothing must be, andawhich is the confidence parameter of successful
+smoothing. I also added the following three parameters all set toNonebecause they must
+be calculated over the data:H p Xwhich is thep-entropy of the data, max H p X R
+which is the maxp-entropy of anyr-subset of the data, andmwhich is the key length.
+Next, I added utility functions for entropy calculation and privacy guarantees. The
+first such function iscompute p entropy. This function takes datax, field sizeq, and
+entropy orderpand returns thep-entropy of the data. The first step is to construct a
+probability distribution for the data by iterating over each element, counting how many
+times it occurs, and creating a probability for it by dividing occurrence rate by total.
+It takes this distribution and then simply calculates thep-entropy using Python math
+functions according to Appendix A in [1]
+The second utility function I added iscompute max subset p entropy. This function
+takes datax, field sizeq, entropy orderp, and subset sizeras parameters and returns
+the maximump-entropy contained within anyr-subset of the data. It does this by iter-
+
+===== PAGE 13 =====
+
+4 Adapting to Full ICC 11
+ating over everyr-subset obtained by callingitertools.combinations(range(n),r),
+taking the subset ofxcorresponding to these indices, computing thep-entropy by calling
+compute p entropy, and tracking the maximum.
+After the two entropy functions are created, all of the tools exist to computem. Thus,
+the next utility function I added wascompute required mwhich takesSystemContext
+as a parameter and returns the minimum possible value ofmaccording to the Theorem
+1 bound [1]. At this point, both the entropy of the data and max entropy of anyr-subset
+have been calculated and stored in the context. So, the first thing the function does is
+ensure that these values exist. Given they do, the function then calculates m directly
+from the
+m≥n+p+ log q(1
+ε)−H p(X) + max
+R
+Hp(XR)
+formula in Theorem 1. It first calculateslog q inv eps=logq( 1
+ε) withmath.logand then
+calculates the quantityn+p+log q inv eps−H p X+max H p X Rwherenandpare
+also in context. Finally it returns the max betweenrfrom context and the ceiling of this
+calculated quantity becausemmust also abide by the Singleton bound so is at leastr
+and must be an integer.
+Because the scheme in [1] now has nonzero information leakage, it is necessary to
+track how much information is being leaked. The final utility function I added does just
+that. This function iscompute leakage boundand it computes the information leakage
+boundε c according to
+εc = p
+p−1 logq(1 +a·2
+2p−1
+p (1 +q−max rHp(XR))ε
+1
+p )
+given in Theorem 1 in [1]. It takesSystemContextas a parameter and returns the
+computedε c. This equation requiresmax H p X Rto be set in the context which is the
+first check that it makes. It then computesε c directly using Python math fromp,q,eps
+andafrom the context.
+All of these functions are used in main and testing scripts to produce a successful
+encoding and to verify that the encoded data has more entropy than the original non-
+uniform data. After I finished these functions, my code now fully implements the ICC
+scheme described in [1] under my no stragglers simplification.
+
+===== PAGE 14 =====
+
+4 Adapting to Full ICC 12
+4.3 Information Set Enumeration at Scale
+I began testing the uniform scheme withq= 31 andn= 10 to have a wide variety of
+inputs. However, when I began testing the ICC implementation with these parameters
+and skewed data the computation time exploded. I looked into why and realized that my
+get information setfunction usingitertools.productiterated over every possible
+combination which required calculatingO(q m) =O(31 17) which is in the order of 10
+septillion combinations. This was tolerable before because I hadm=r, which gave
+O(qm) =O(31 r) which is reasonable-enough to compute for smallras I had. So, in
+order to combat this, I revised myget information setimplementation to recursively
+check only combinations that may possibly sum to at mostd. I did this by tracking the
+“budget” remaining for a combination being created and never exceeding this budget.
+This means that whole subtrees which are useless to check get pruned. This runs in
+O(|Id,m|) =O(λ(q,d,m)) =O(
+ m+d
+d
+
+) time. For the same parameters, I was testing
+withd= 2 and calculatedm= 17. So, it requires calculating 171 combinations instead
+of 10 septillion. This is a massive improvement as it does not waste computation on
+combinations that would never be used.
+4.4 Testing
+In order to verify my scheme I changed the main script from the previous, uniform
+scheme. I amended it so that the data distribution is skewed where the firstavalues
+share 90% of the mass and the remainingn−avalues share the remaining 10%. I also
+added entropy and leakage bound calculations so that I can test how well the scheme is
+performing. Throughout the development of my implementation I performed simple tests
+with the main script to ensure that the implementation is not failing. I tested over a
+variety of parameter combinations and, once I was happy with my result, decided to make
+a fully comprehensive test suite. I used both Claude and Gemini to generate portions of
+the test suite according to the different situations I wanted to test and validated their
+output. This suite is in the filetest icc.pyand it is split up into six sections that each
+test a different aspect of the scheme.
+
+===== PAGE 15 =====
+
+4 Adapting to Full ICC 13
+Section 1: Correctness
+Table 1 confirms that the Reed-Muller information-set decoding pipeline produces
+exact results across all tested polynomial forms. All 10 trials pass for every polynomial,
+validating correctness for degrees 1 through 4. An interesting note is that the computation
+times exploded as the polynomial degree increased. This is expected as calculating the
+information set becomes more involved. Unfortunately, it means that any polynomial
+higher than degree 4 does not work to test on my personal computer.
+Table 1: Polynomial variety: 10 independent trials per polynomial (q= 31,n= 10 or 6,
+ε= 10−6, skew = 0.9).
+Polynomial Trials Pass Avg. time (ms)
+f=x 2
+0 +x 1x2 10 10 1380.7
+f=x 0 +x 1 +x 2 10 10 1363.2
+f=x 0x1 +x 2x3 10 10 1389.8
+f=x 2
+0 +x 2
+1 +x 2
+2 10 10 1411.7
+f=x 0x1x2 10 10 19842.5
+f=x 0x1x2x3 10 10 448252.4
+Table 2 shows correctness across varying system parameters (q,n,d,r), and Table 3
+confirms stability over 50 independent random key draws.
+Table 2: Parameter variety:f=x 0 +x 1, 5 trials per configuration.
+(q, n, d, r) Trials Pass Avg. time (ms)
+(31,8,2,4) 5 5 887.5
+(37,10,2,3) 5 5 1167.9
+(41,6,3,2) 5 5 13028.0
+(31,12,1,5) 5 5 12.9
+Table 3: Random key stability:f=x 2
+0 +x 1x2,q= 31,n= 8,d= 2,r= 4, 50
+independent key draws.
+Trials Pass Avg. time (ms)
+50 50 902.2
+These correctness tests provide comprehensive testing that the uniform scheme func-
+tions as intended.
+
+===== PAGE 16 =====
+
+4 Adapting to Full ICC 14
+Section 2: Theorem 1 Bound Validation
+Theorem 1 requires
+m≥n+p+ log q(1
+ε)−H p(X) + max
+R
+Hp(XR)
+Table 4 verifies thatcompute required m()returns exactly⌈RHS⌉(markedTfor tight)
+across all tested parameter combinations, confirming that the implementation satisfies
+the bound with equality.
+Table 4: Theorem 1 bound verification across parameter combinations.Tdenotes a tight
+bound (m=⌈RHS⌉).
+(q, n, r, p, ε)H p(X) max RHp(XR)mRHS
+(31,8,3,2,10 −4) 0.241 0.320 13T13
+(31,10,5,2,10 −6) 0.253 0.371 17T17
+(31,12,4,2,10 −6) 0.345 0.404 19T19
+(31,8,3,3,10 −5) 0.124 0.320 15T15
+(37,10,4,2,10 −6) 0.215 0.272 16T16
+Section 3: Privacy and Leakage Analysis
+Table 5 shows thatε c decreases strictly asεdecreases, consistent with Theorem 1:
+tighter smoothing yields smaller information leakage.
+Table 5: Leakage boundε c as a function ofε(q= 31,n= 10,r= 5,p= 2, skew = 0.9,
+Hp(X) = 0.332, maxRHp(XR) = 0.469).
+ε m ε c
+10−2 14 0.57784776
+10−4 15 0.09129453
+10−6 17 0.00980095
+10−8 18 0.00098755
+10−10 19 0.00009883
+Table 6 sweeps skewness from 0.3 to 0.95 at fixedε= 10 −6. The leakage boundε c
+is non-decreasing in skewness, confirming that more non-uniform data requires a higher
+privacy cost, as expected from the entropy term max RHp(XR) in Theorem 1.
+Table 7 sweeps the confidence parametera, which controls the probability guarantee
+Pr[ICC holds]≥1−1/a. The leakage boundε c is strictly increasing ina, reflecting the
+
+===== PAGE 17 =====
+
+4 Adapting to Full ICC 15
+Table 6: Leakage boundε c as a function of data skewness (q= 31,n= 10,r= 5,p= 2,
+ε= 10−6).
+SkewH p(X) max RHp(XR)m ε c
+0.30 0.499 0.469 16 0.00980095
+0.50 0.416 0.469 17 0.00980095
+0.70 0.416 0.469 17 0.00980095
+0.80 0.351 0.371 17 0.01044852
+0.90 0.190 0.190 17 0.01238692
+0.95 0.226 0.298 17 0.01109537
+trade-off: higher confidence in the probabilistic smoothing guarantee comes at the cost
+of a looser worst-case leakage bound.
+Table 7: Leakage boundε c and probability guarantee as functions ofa(q= 31,n= 10,
+r= 5,p= 2,ε= 10 −6, skew = 0.9,m= 17 throughout).
+aProb. guaranteeε c
+2≥0.500 0.00394019
+5≥0.800 0.00980095
+10≥0.900 0.01943970
+20≥0.950 0.03825144
+50≥0.980 0.09129453
+Section 4: Entropy Sensitivity
+Table 8 confirms thatH p(X) is decreasing inpfor fixed data, consistent with the
+property ofp- entropy stated in Appendix A.
+Table 8:H p(X) as a function ofpfor fixed data (q= 31,n= 8, skew = 0.9).
+p H p(X)
+2 0.310962
+3 0.307396
+4 0.304406
+5 0.301925
+6 0.299877
+Table 9 shows that after linear-code encoding,Hp(eX)>H p(X) in all cases, confirming
+that the encoding moves the distribution toward uniform as required by Definition 2.
+
+===== PAGE 18 =====
+
+4 Adapting to Full ICC 16
+Table 9: Entropy before and after encoding (q= 31,n= 8,r= 4,p= 2).
+SkewH p(X)H p(eX)
+0.70 0.2623 0.4875
+0.90 0.2206 0.5406
+0.95 0.1518 0.5406
+Section 5: Edge Cases
+Withr= 1 (minimal privacy parameter), the scheme producesm= 14 and decodes
+correctly. With near-deterministic data (99% mass on a single symbol), the scheme
+correctly inflatesmto 15 to compensate for the extremely low entropy, and still decodes
+correctly.
+Section 6: Massive Datasets (m≪n)
+Over the course of my testing I noticed that, given I was testing with smallnso that
+compute p entropywould run reasonably quickly on my machine,mwas always greater
+thann. As shown in my analysis in Section 2.4, I knew that the scheme allowsmmuch
+smaller thannand I wanted to verify this. So, I did more research intop-entropy and
+found that it is the same as R´ enyi entropy. I looked into R´ enyi’s 1961 work On Measures
+of Entropy and Information [5] where he proposes his entropy generalization. He builds
+his entropy off of a key remark: “the entropy of a combined experiment consisting of the
+performance of two independent experiments is equal to the sum of the entropies of these
+two experiments.” Because I am drawing my sample data independently at random,
+this greatly simplifies entropy calculation. By this additivity of R´ enyi entropy under
+independence ((1.20) in [5]), applying it inductively toni.i.d. draws givesH p(X) =
+n·H p(xsingle). The same follows forH p(Xr) =r·H p(xsingle∈R). I created a utility
+function to calculate entropy through this shortcut calledcompute fast iid entropy.
+It functions much the same ascompute p entropyexcept it computes the entropy over
+the probability distribution that the data is drawn from rather than over the data itself.
+Because allndata points are drawn independently, this can be accurately scaled up to
+the entire dataset orr-subset by multiplying bynorrwithin the test cases.
+I am keeping this helper function withintest icc.pybecause, while it is an invaluable
+tool for proving the scheme’s efficacy in practice, the exact entropy calculations of the
+
+===== PAGE 19 =====
+
+5 Further Work 17
+dataset instead of the probability distribution it is drawn from are necessary. So, it is
+not a true replacement forcompute p entropy.
+Table 10 uses thecompute fast iid entropyscaling shortcut to demonstrate the
+m≪nproperty at scale. For high-entropy data,H p(X)≈ncancels the leadingnterm
+in Theorem 1, keepingmsmall. For low-entropy data (skew = 0.95),H p(X) is much
+smaller thann, so the bound correctly forcesm≈n. This corroborates what was shown
+in Section 2.4.
+Table 10: Key sizemvs. dataset sizenfor i.i.d. data (q= 31,p= 2,ε= 10 −6).
+n rSkewH p(X)m m≪n?
+10,000 50 0.10 9,999.7 57 Yes
+100,000 100 0.10 99,996.5 110 Yes
+500,000 500 0.05 496,400.4 4,102 Yes
+100,000 100 0.95 34,971.1 65,070 No
+5 Further Work
+5.1 Straggler Resilience via Information Super-Sets
+The obvious next direction to take this implementation is to fully realize the ICC
+scheme and implement straggler resilience via information super-sets. As previously
+mentioned, a multisetT∈[n] is anS-information super-set if any (|T|−S)-subset ofT
+contains an information set. This is given in Definition 4 in [3]. So, even ifSworkers fail
+to respond, the remaining workers who do respond have evaluations on an information
+set so their responses are sufficient for the client to decode the answer.
+I have begun a first pass at information super-set generation through creating a
+get information supersetfunction inutils.py. This function takes aGalois field
+(GF), field sizeq, number of variablesm, maximum total degreed, and number of strag-
+glersSas parameters. It returns a list which is the superset containing entries such that
+any subset of sizeλcontain an information set. Inefficient describes this construction
+too kindly; it brute-force builds the superset from the ground up by ensuring that no in-
+variants are violated. It begins with the information set I have been relying upon which
+is created by callingget information set. It then enumerates all possible points with
+itertools.product. For each of these points, it checks if it is already in the superset and
+
+===== PAGE 20 =====
+
+5 Further Work 18
+if not, tentatively adds it. It then ensures that every possible subset of sizeλmaintains
+full rank given this point was added. If this passes, the point is added.
+While this is a highly inefficient construction, it serves as a good jumping off point to
+expanding this scheme to tolerate straggling workers.
+5.2 Case Study
+As another part of my thesis I want to apply this ICC scheme onto a machine learning
+dataset so this is one more future path for the project. I will take a dataset I want to
+execute a learning algorithm on and follow the encoding, computation, and decoding
+phases of this scheme instead of directly performing the learning algorithm on the data.
+I will use a learning algorithm that can be accurately computed as a polynomial to
+complete the entire learning stage as if the data has been encoded and offloaded to a
+cloud environment.
+The most interesting part of this case study will be analyzing the information leakage
+bounds. I will explore how reliable they are, how consistent they are, and whether they
+are meaningful enough to provide justification for this scheme being a competitive way
+to train ML models securely without the computation power to do so on their own.
+
+===== PAGE 21 =====
+
+References 19
+References
+[1] S. Tarnopolsky, Z. Deng, V. Ramkumar, N. Raviv, and A. Cohen, “Individual confi-
+dential computing of polynomials over non-uniform information,” 2025.
+[2] N. Raviv and Z. Goldfeld, “Perfect subset privacy for data sharing and learning,”
+2022.
+[3] Z. Deng, V. Ramkumar, and N. Raviv, “Perfect subset privacy in polynomial com-
+putation,” 2024.
+[4] M. Hostetter, “Galois: A performant NumPy extension for Galois fields,” 11 2020.
+[5] A. R´ enyi, “On measures of entropy and information,” 1961.
