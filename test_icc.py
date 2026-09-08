@@ -25,7 +25,7 @@ Description:
 
 Usage:
     python test_icc.py          # full suite (may take several minutes)
-    python test_icc.py --fast   # skip the expensive combinatorial tests
+    python test_icc.py --fast   # reduced trial counts, skips the 500k dataset
 """
 
 import sys
@@ -58,6 +58,17 @@ from utils import (
 FAST_MODE = "--fast" in sys.argv
 
 _SECTION_WIDTH = 72
+
+
+def trials(full: int, fast: int) -> int:
+    """
+    Selects a trial count according to whether --fast was passed.
+
+    :param full: Trial count for a normal run
+    :param fast: Reduced trial count for --fast
+    :return: The count to use
+    """
+    return fast if FAST_MODE else full
 
 
 def section(title: str):
@@ -184,7 +195,7 @@ def test_correctness():
     section("SECTION 1 · CORRECTNESS")
 
     # ── 1a: multiple polynomials, varying contexts ────────────────────────
-    subsection("1a · Polynomial variety (10 trials each)")
+    subsection(f"1a · Polynomial variety ({trials(10, 2)} trials each)")
 
     # Format: "name": (polynomial_fn, n, d, r)
     polynomials = {
@@ -202,7 +213,7 @@ def test_correctness():
             (lambda data: data[0]*data[1]*data[2]*data[3], 6, 4, 3),
     }
 
-    TRIALS = 10
+    TRIALS = trials(10, 2)
     row("Polynomial", "Trials", "Pass", "Fail", "Avg ms",
         widths=(44, 8, 6, 6, 10))
     row("-" * 44, "-" * 8, "-" * 6, "-" * 6, "-" * 10,
@@ -238,7 +249,7 @@ def test_correctness():
         (31, 12, 1, 5)
     ]
 
-    TRIALS_V = 5
+    TRIALS_V = trials(5, 2)
     row("Params (q,n,d,r)", "Trials", "Pass", "Fail", "Avg ms",
         widths=(24, 8, 6, 6, 10))
     row("-" * 24, "-" * 8, "-" * 6, "-" * 6, "-" * 10,
@@ -269,7 +280,7 @@ def test_correctness():
 
     # ── 1c: repeated trials, random keys ─────────────────────────────────
     subsection("1c · Random key stability (50 independent trials)")
-    TRIALS_C = 50
+    TRIALS_C = trials(50, 5)
     ctx_c, GF_c, x_c = build_context_and_data(q=31, n=8, d=2, r=4, seed=42)
     fn_c = lambda data: data[0] ** 2 + data[1] * data[2]
 
@@ -503,6 +514,9 @@ def test_massive_datasets():
         (500_000, 500, 0.05, "500k elements, very high entropy"),
         (100_000, 100, 0.95, "100k elements, LOW entropy (m should scale with n)")
     ]
+    if FAST_MODE:
+        # The 500k sample draw dominates this section; keep the entropy regimes it covers
+        massive_configs = [c for c in massive_configs if c[0] < 500_000]
 
     row("Dataset Size (n)", "r", "Skew", "H_p(X)", "Key Size (m)", "m << n?",
         widths=(18, 6, 8, 12, 14, 10))
@@ -555,7 +569,7 @@ def main():
     print("  over Non-Uniform Information  (Tarnopolsky et al. 2025)")
     print("=" * _SECTION_WIDTH)
     if FAST_MODE:
-        print("\n  [Running in --fast mode: some expensive tests are skipped]")
+        print("\n  [--fast: reduced trial counts, 500k dataset skipped]")
 
     t_start = time.perf_counter()
     test_correctness()
