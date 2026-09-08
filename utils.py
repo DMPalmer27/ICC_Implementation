@@ -68,15 +68,16 @@ def compute_symbol_p_entropy(x, q: int, p: int) -> float:
     :param p: Order of the entropy (p >= 2)
     :return: Per-symbol p-entropy h of the data, in log_q units
     """
-    counts = np.zeros(q, dtype=float)
-    for val in x:
-        counts[int(val)] += 1
-    total = counts.sum()
-    if total == 0:
+    # Histogram only the values that actually occur. A dense length-q histogram would be
+    # 8.6 GB at the case-study field size q ~ 2^30, and symbols not present contribute
+    # nothing to sum(prob^p) anyway.
+    values = np.asarray(x).astype(np.int64, copy=False)
+    if values.size == 0:
         return 0.0
 
-    probs = counts / total
-    sum_pp = sum(prob ** p for prob in probs if prob > 0)
+    _, counts = np.unique(values, return_counts=True)
+    probs = counts / values.size
+    sum_pp = float(np.sum(probs ** p))
     res = (1.0 / (1-p)) * math.log(sum_pp, q)
     return res
 
