@@ -388,9 +388,13 @@ standardization, better conditioned at low feature counts, and no need to fetch 
 ## Open questions for Raviv
 
 1. **(New, and the most urgent.)** Theorem 1 needs `H_p(X)` for the whole length-`n`
-   vector and `max_R H_p(X_R)`. For independent coordinates these are `Σ h_i` and the sum
-   of the `r` largest `h_i`. Real regression features are **correlated**, so `Σ h_i`
-   *over*estimates `H_p(X)`, which *under*estimates `m` — unsafe. What is the intended
+   vector and `max_R H_p(X_R)`. For **independent** coordinates Rényi entropy is additive,
+   giving `Σ h_i` and the sum of the `r` largest `h_i` exactly. Real regression features are
+   correlated, and Rényi entropy of order `p ≥ 2` is **not subadditive** (verified: a binary
+   pair with `H_2(X,Y) = 0.6200 > H_2(X) + H_2(Y) = 0.5837`), unlike Shannon. So `Σ h_i` is
+   not a bound in either direction and the error is unsigned. Theorem 1 needs a **lower**
+   bound on `H_p(X)` (minus sign) and an **upper** bound on `max_R H_p(X_R)` (plus sign);
+   either one backwards under-estimates `m` and breaks the guarantee. What is the intended
    practice: a valid lower bound on `H_p(X)`, a decorrelating pre-transform, or something
    in the paper I'm missing?
 2. Which entropy definition is intended in `compute_p_entropy` — the empirical distribution

@@ -69,10 +69,14 @@ as a **different estimator, not an oracle**: it measures the empirical entropy o
 `r`-element realization, which for small `r` is badly biased (5 values cannot resolve a
 31-ary distribution) and is exactly why it could exceed `H_p(X)`.
 
-**Open with Raviv** (blocks Weeks 3–4): real regression features are correlated, so
-`H_p(X) = Σ hᵢ` overestimates the true joint entropy and therefore *under*estimates `m` —
-the unsafe direction. The i.i.d. model is exact for the synthetic control but needs a ruling
-for `load_diabetes`. Fallback if it is rejected: per-feature `h_j` estimated from the `n_s`
+**Open with Raviv** (blocks Weeks 3–4): the closed form is exact only when coordinates are
+independent. Note that Rényi entropy of order `p ≥ 2` is **not subadditive** (verified
+numerically: a binary pair with `H_2(X,Y) = 0.6200 > H_2(X) + H_2(Y) = 0.5837`), unlike
+Shannon. So for correlated features `Σ hᵢ` is not an upper *or* lower bound on `H_p(X)` —
+the error is unsigned. Theorem 1 needs a **lower** bound on `H_p(X)` (it enters with a minus
+sign) and an **upper** bound on `max_R H_p(X_R)`; getting either backwards under-estimates
+`m`, which breaks the privacy guarantee. The i.i.d. model is exact for the synthetic control
+but needs a ruling for `load_diabetes`. Fallback if it is rejected: per-feature `h_j` estimated from the `n_s`
 samples in column `j`, giving `H_p(X) = n_s·Σ_j h_j` and `max_R H_p(X_R) = r·max_j h_j`.
 
 ## 5. Other fixes
