@@ -9,7 +9,7 @@ import numpy as np
 from config import SystemContext
 from client import Client
 from server import Server
-from utils import generate_vandermonde_G, compute_p_entropy, compute_max_subset_p_entropy, compute_required_m, \
+from utils import compute_p_entropy, compute_max_subset_p_entropy, compute_required_m, \
     compute_leakage_bound, generate_random_G
 
 
@@ -56,7 +56,8 @@ def main():
     print(f"Original x: {x}")
     print(f"Client Secret Key (k): {client.k}")
     print(f"Uploaded x_tilde: {x_tilde}")
-    print(f"Encoded data entropy: {compute_p_entropy(x_tilde, context.q, context.p)}")
+    print(f"H_{context.p}(X̃) (encoded)      = {compute_p_entropy(x_tilde, context.q, context.p):.4f}  "
+          f"(vector entropy after smoothing; max is n = {context.n})")
 
     server.store_data(x_tilde, G)
 

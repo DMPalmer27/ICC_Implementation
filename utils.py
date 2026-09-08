@@ -4,6 +4,7 @@ Author: Daniel Palmer (d.m.palmer@wustl.edu)
 Description: This file contains general utility functions for the ICC implementation
 """
 
+import functools
 import itertools
 import galois
 import math
@@ -52,14 +53,20 @@ def generate_random_G(GF: type[galois.FieldArray], m: int, n: int) -> galois.Fie
     """
     return GF.Random((m,n))
 
-def compute_p_entropy(x, q:int, p:int) -> float:
+def compute_symbol_p_entropy(x, q: int, p: int) -> float:
     """
-    Calculates the p-entropy of the data according to the formula given in ICC Appendix A
+    Calculates the PER-SYMBOL p-entropy h of the data according to the formula given in
+    ICC Appendix A. The alphabet distribution is estimated empirically from the n symbols
+    of x, which treats them as n i.i.d. draws from one common source distribution.
+
+    Units are log_q, so h = 0 for deterministic data and h = 1 for data uniform over F_q.
+    This is the primitive estimator; Theorem 1 wants the vector quantity H_p(X), which is
+    n * h under the i.i.d. model -- see compute_p_entropy.
 
     :param x: Data within range [0,q-1]
     :param q: Field (alphabet) size
     :param p: Order of the entropy (p >= 2)
-    :return: p-entropy of the data
+    :return: Per-symbol p-entropy h of the data, in log_q units
     """
     counts = np.zeros(q, dtype=float)
     for val in x:
@@ -73,17 +80,65 @@ def compute_p_entropy(x, q:int, p:int) -> float:
     res = (1.0 / (1-p)) * math.log(sum_pp, q)
     return res
 
+def compute_p_entropy(x, q: int, p: int) -> float:
+    """
+    Calculates H_p(X), the p-entropy of the whole length-n data VECTOR, as required by the
+    Theorem 1 bound. Renyi entropy is additive over independent coordinates, so under the
+    i.i.d. source model H_p(X) = n * h where h is the per-symbol entropy.
+
+    Note the units: log_q, so H_p(X) ranges over [0, n] and equals n exactly when X is
+    uniform over F_q^n. Previously this function returned the per-symbol h, which made the
+    -H_p(X) and +max_R H_p(X_R) terms of Theorem 1 nearly cancel and forced m > n in every
+    test. See compute_symbol_p_entropy for the per-symbol quantity.
+
+    :param x: Data within range [0,q-1]
+    :param q: Field (alphabet) size
+    :param p: Order of the entropy (p >= 2)
+    :return: H_p(X) for the full data vector, in log_q units
+    """
+    return len(x) * compute_symbol_p_entropy(x, q, p)
+
 def compute_max_subset_p_entropy(x, q: int, p: int, r: int) -> float:
     """
-    Calculates the maximum p entropy in any subset of the data in order to derive an accurate
-    value for m which Theorem 1 requires. Because this is a toy example I am computing it
-    directly, in the future it will shift to the further bound in Appendix B for efficiency
+    Calculates max_R H_p(X_R) over all r-subsets R, the quantity Theorem 1 adds to the
+    bound on m.
+
+    Under the i.i.d. source model every r-subset of X has the same distribution, so the
+    maximum is attained everywhere and equals r * h in closed form. This replaces a brute
+    force over all C(n,r) subsets, which was superlinear in n and capped the project at
+    n ~ 12 (C(60,5) = 5.4M). Estimating h from all n symbols is also a strictly better
+    estimator than the old approach of estimating it from just r values.
+
+    Because r <= n, this construction guarantees max_R H_p(X_R) <= H_p(X), which the old
+    code could violate -- the tell that its scaling was wrong.
 
     :param x: Data within range [0,q-1]
     :param q: Field (alphabet) size
     :param p: Order of the entropy (p >= 2)
     :param r: Subset size (privacy parameter)
-    :return: Maximum subset p-entropy over the data
+    :return: max_R H_p(X_R) over all r-subsets, in log_q units
+    """
+    return r * compute_symbol_p_entropy(x, q, p)
+
+def _compute_max_subset_p_entropy_empirical(x, q: int, p: int, r: int) -> float:
+    """
+    DEPRECATED -- retained for reference only, not used to compute m.
+
+    This is the original brute force over all C(n,r) subsets. It is NOT an oracle for
+    compute_max_subset_p_entropy and will not agree with it: it estimates the empirical
+    entropy of one r-element realization, whereas Theorem 1 wants the entropy of the
+    r-subset under the source distribution. For small r the empirical estimate is badly
+    biased (r values cannot resolve a q-ary distribution), which is why it could report
+    max_R H_p(X_R) > H_p(X).
+
+    Two defensible estimators exist here and they should not be silently mixed; this one
+    is kept visible so the difference stays documented rather than lost.
+
+    :param x: Data within range [0,q-1]
+    :param q: Field (alphabet) size
+    :param p: Order of the entropy (p >= 2)
+    :param r: Subset size (privacy parameter)
+    :return: Maximum empirical per-subset p-entropy, in log_q units
     """
     n = len(x)
     x_arr = np.array([int(v) for v in x])
@@ -91,7 +146,7 @@ def compute_max_subset_p_entropy(x, q: int, p: int, r: int) -> float:
     max_entropy = -9999999
     for indices in itertools.combinations(range(n), r):
         subset = x_arr[list(indices)]
-        h = compute_p_entropy(subset, q, p)
+        h = compute_symbol_p_entropy(subset, q, p)
         if h > max_entropy:
             max_entropy = h
     return max_entropy
@@ -103,9 +158,17 @@ def compute_required_m(context: SystemContext) -> int:
     m >= n + p + log_q(1/ε) - H_p(X) + max_R H_p(X_R) which is used to calculate m. For storage efficiency,
     only returns the minimum value satisfying this formula.
 
+    Both entropy terms must be VECTOR quantities in log_q units (H_p(X) over all n symbols,
+    max_R H_p(X_R) over r of them), not per-symbol values -- see compute_p_entropy.
+
+    The max(r, ...) floor is justified by Remark 1 of the ICC paper: a key of size at least r
+    is necessary for r-subset privacy. (The report previously justified it by the Singleton
+    bound, which came from the MDS/uniform predecessor scheme; under ICC the code is random,
+    so Singleton does not apply.)
+
     :param context: SystemContext with the system parameters calculated and set
     :return: The minimum value that m can be satisfying Theorem 1
-    :raises: ValueError if the context has not been properly set
+    :raises: ValueError if the context has not been properly set or the entropies are inconsistent
     """
     if context.H_p_X is None or context.max_H_p_X_R is None:
         raise ValueError(
@@ -114,10 +177,36 @@ def compute_required_m(context: SystemContext) -> int:
             "compute_max_subset_p_entropy() first and store the results on context."
         )
 
+    # Guard the impossible cases. An r-subset cannot carry more entropy than the whole
+    # vector, and n symbols over F_q cannot exceed n in log_q units. Either violation means
+    # per-symbol and vector conventions have been mixed, which would silently under-estimate
+    # m and break the privacy guarantee.
+    if context.max_H_p_X_R > context.H_p_X + 1e-9:
+        raise ValueError(
+            f"max_R H_p(X_R) = {context.max_H_p_X_R:.6f} > H_p(X) = {context.H_p_X:.6f}, "
+            "which is impossible for the true quantities. This usually means a per-symbol "
+            "entropy was stored where a vector entropy H_p(X) was expected."
+        )
+    if context.H_p_X > context.n + 1e-9:
+        raise ValueError(
+            f"H_p(X) = {context.H_p_X:.6f} exceeds n = {context.n}. In log_q units the "
+            "entropy of n symbols over F_q is at most n."
+        )
+
     log_q_inv_eps = math.log(1.0 / context.epsilon, context.q)
     m_float = (context.n + context.p + log_q_inv_eps - context.H_p_X + context.max_H_p_X_R)
     # Take ceiling: m must be an integer and must satisfy the >= bound
-    return max(context.r, math.ceil(m_float))
+    m = max(context.r, math.ceil(m_float))
+
+    # The scheme requires d < m(q-1) for RM_q(d, m) to be well defined. Never asserted
+    # anywhere before; it binds only at toy field sizes.
+    if context.d >= m * (context.q - 1):
+        raise ValueError(
+            f"Scheme requires d < m(q-1), but d = {context.d} and m(q-1) = {m * (context.q - 1)} "
+            f"(m = {m}, q = {context.q})."
+        )
+
+    return m
 
 def compute_leakage_bound(context: SystemContext) -> float:
     """
@@ -142,6 +231,51 @@ def compute_leakage_bound(context: SystemContext) -> float:
     eps_c = (p / (p - 1)) * math.log(1 + delta, q)
     return eps_c
 
+def build_monomial_matrix(GF: type[galois.FieldArray], points, exponents) -> galois.FieldArray:
+    """
+    Builds the evaluation matrix M[i, j] = prod_v points[i][v] ** exponents[j][v] over GF.
+
+    This is the interpolation matrix the Client solves to recover g, and it is also used to
+    evaluate g at the secret key. It depends only on the evaluation points and the monomial
+    exponents -- not on the data, the polynomial, or the key -- so a caller that reuses one
+    information set can build it once and cache it.
+
+    Implementation note: the obvious triple loop (points x exponents x variables) costs
+    lambda^2 * m interpreted operations and dominated decoding by ~400x over the linear solve
+    it feeds (64.9 s vs 0.15 s at m=48, d=2). This version instead makes one vectorised pass
+    per VARIABLE: it builds the power table [1, t_v, t_v^2, ...] for column v across all
+    points at once, gathers by exponent, and multiplies into the accumulator. Measured 0.18 s
+    for the same case, a ~360x speedup, elementwise identical to the loop.
+
+    :param GF: Galois field object
+    :param points: N evaluation points, as an (N, m) array or a sequence of length-m vectors
+    :param exponents: L monomial exponent tuples, as an (L, m) array or sequence of tuples
+    :return: GF array of shape (N, L) of monomial evaluations
+    """
+    P = points if isinstance(points, GF) else GF(np.asarray(points))
+    P = P.reshape(1, -1) if P.ndim == 1 else P
+    E = np.asarray(exponents, dtype=np.int64)
+    E = E.reshape(1, -1) if E.ndim == 1 else E
+
+    n_points, m = P.shape
+    if E.shape[1] != m:
+        raise ValueError(f"points have {m} variables but exponents have {E.shape[1]}")
+
+    M = GF.Ones((n_points, E.shape[0]))
+    for v in range(m):
+        max_exp = int(E[:, v].max())
+        if max_exp == 0:
+            # Every monomial ignores this variable, so it contributes a factor of 1
+            continue
+        # powers[e] holds points[:, v] ** e for every point at once
+        powers = [GF.Ones(n_points)]
+        for _ in range(max_exp):
+            powers.append(powers[-1] * P[:, v])
+        M = M * GF(np.stack(powers))[E[:, v]].T
+
+    return M
+
+@functools.lru_cache(maxsize=None)
 def get_information_set(q: int, m: int, d: int) -> list[tuple[int, ...]]:
     """
     Generates the core combinatorial tuples for Reed-Muller RM_q(d, m).
@@ -149,6 +283,10 @@ def get_information_set(q: int, m: int, d: int) -> list[tuple[int, ...]]:
 
     This gives explicit description of I d,m information set given in Section IV Definition 3 of 2024 paper
     using a dfs approach to prune so that not every option is visited
+
+    Results are memoised because the set depends only on (q, m, d) and is rebuilt on every
+    decode_result() and every store_data(). The returned list is shared between callers, so
+    treat it as read-only.
 
     :param q: Field (alphabet) size
     :param m: Number of variables

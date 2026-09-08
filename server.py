@@ -42,13 +42,14 @@ class Server:
         self.x_tilde = x_tilde
         self.G = G
         self.points = self._get_evaluation_points()
-        self.workers = []
 
-        # Create workers and give each worker a piece of the data
-        for p in self.points:
-            tG = np.matmul(p, self.G)
-            shifted_data = self.x_tilde - tG
-            self.workers.append(Worker(shifted_data))
+        # Shift the stored data by tG for every evaluation point t at once. This is one
+        # (lambda x m) @ (m x n) product rather than lambda separate (m,) @ (m, n) matmuls
+        # in a Python loop; x_tilde broadcasts across the rows.
+        T = self.GF(np.asarray([np.asarray(p) for p in self.points]))
+        shares = self.x_tilde - (T @ self.G)
+
+        self.workers = [Worker(shares[i]) for i in range(shares.shape[0])]
 
     def _get_evaluation_points(self) -> list[galois.FieldArray]:
         """
