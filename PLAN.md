@@ -65,23 +65,37 @@ With a common scale `f` for all three factors, `h ≈ (f+2)/(3f + log₂(2·n_s�
 > The real lever is not `f`. It is the **ratio of quantized factors to data symbols**
 > in the denominator — see Weeks 7–8.
 
-### Feasibility envelope
+### Feasibility envelope (MEASURED, Week 2)
 
-Derived at `r = 5`, `p = 2`, `ε = 1e-6`, `d = 2`, `q ≈ 2³⁰`:
+`feasibility.py`, `q = 2³⁰+3`, `r = 5`, `p = 2`, `ε = 1e-6`, `d = 2`. Times are seconds on
+the dev machine; "warm" is the per-GD-step cost once the `Client` has cached `M`, which is
+the number that matters for a training run.
 
-| `n` | `h` | `m` | `λ` |
-|---:|---:|---:|---:|
-| 60 | 0.33 | 45 | 1,081 |
-| 60 | 0.46 | 38 | 780 |
-| 100 | 0.33 | 73 | 2,775 |
-| 150 | 0.33 | 107 | 5,995 |
+| `n` | `h` | `m` | `λ` | `M` size | build | warm solve | verdict |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 60 | 0.33 | 45 | 1,081 | 8.9 MB | 0.11 | **0.11** | yes |
+| 60 | 0.46 | 38 | 780 | 4.6 MB | 0.06 | 0.07 | yes |
+| 100 | 0.33 | 72 | 2,701 | 55.7 MB | 1.77 | **0.56** | yes |
+| 100 | 0.46 | 59 | 1,830 | 25.6 MB | 0.56 | 0.27 | yes |
+| 150 | 0.33 | 105 | 5,671 | 245 MB | 16.03 | 2.41 | borderline |
+| 150 | 0.46 | 86 | 3,828 | 112 MB | 5.88 | 1.10 | borderline |
+| 250 | 0.33 | 172 | 15,051 | **1.7 GB** | — | — | blocked |
+| 250 | 0.46 | 140 | 10,011 | 765 MB | — | — | blocked |
 
-**Case study targets `n ≈ 60`** — about **15 samples × 3 features** (`n = n_s(p+1) = 60`),
-`f = 8` fractional bits, `q` a prime just above `2³⁰`.
+**Go/no-go: raise the case study from `n = 60` to `n = 100`** — 25 samples × 3 features, or
+20 × 4. A gradient step costs 0.56 s warm, and the whole `n=60` cycle (store + compute +
+decode) measures 0.29 s cold / 0.14 s warm. `n = 60` was set against a cost model that was
+wrong by two orders of magnitude; there is no reason to keep it.
 
-This is small for ML, and that is fine. The paper's contribution is *correctness
-end-to-end plus an honest characterization of the parameter regime*, not a competitive
-benchmark. **Re-verify this envelope in Week 2** — it is derived, not fully measured.
+**The wall moved and changed character.** It is no longer decode time — it is **memory**.
+At `n = 250` the dense `λ × λ` interpolation matrix is 1.7 GB. Build cost also overtakes
+solve cost as `λ` grows (`O(m·λ²)` vs. the sparse solve), but build is paid once per
+`(m, d)` and cached, so it does not bind a training run.
+
+This **promotes the block-triangular decoder from a complexity result to the thing that
+unlocks `n > 150`**: with `C(2d,d) = 6` nonzeros per row, `M` needs `O(λ)` storage — about
+7,300 entries at `λ=1,225` instead of 1.5M — so a sparse representation removes the memory
+wall entirely, not just the time. Still W7–8, but the justification is now stronger.
 
 ### The cost model in the last version of this plan was wrong (measured)
 
