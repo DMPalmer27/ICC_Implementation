@@ -30,16 +30,27 @@ The non-uniform extension replaces *zero* leakage with *negligible* leakage via
 
 ## File map
 
+Implementation lives in `icc/`, which is a plain directory (not an installed package).
+Entry points put it on `sys.path` via `tests/conftest.py`, `tools/_path.py`, or an inline
+shim in `main.py`, so modules keep importing each other by plain name (`from utils import`).
+
 | File | Role |
 |---|---|
-| `config.py` | `SystemContext` dataclass — all scheme parameters in one place |
-| `client.py` | `Client.encode_data` (storage), `Client.decode_result` (interpolate `g`, evaluate at `k`) |
-| `server.py` | `Server` = the admin: shards `x̃` to workers, aggregates results |
-| `worker.py` | `Worker` — deliberately trivial, just `f(its share)` |
-| `utils.py` | `G` generation, entropy, Theorem 1 `m` bound, leakage bound, information (super)set enumeration |
+| `icc/config.py` | `SystemContext` dataclass — all scheme parameters in one place |
+| `icc/client.py` | `Client.encode_data` (storage), `Client.decode_result` (interpolate `g`, evaluate at `k`); caches the interpolation matrix `M` |
+| `icc/server.py` | `Server` = the admin: shards `x̃` to workers, aggregates results |
+| `icc/worker.py` | `Worker` — deliberately trivial, just `f(its share)` |
+| `icc/utils.py` | `G` generation, entropy, Theorem 1 `m` bound, leakage bound, `build_monomial_matrix`, information (super)set enumeration |
 | `main.py` | One end-to-end demo run with printed diagnostics |
-| `test_icc.py` | 6-section validation suite mapped to paper claims |
-| `full_test.txt` | Saved output of the last full `test_icc.py` run |
+| `tests/test_icc.py` | 6-section validation suite mapped to paper claims; its printed tables are report output |
+| `tests/test_regression.py` | Fast equivalence/invariant checks; keeps pre-optimization implementations as oracles |
+| `tests/conftest.py` | `sys.path` shim; imported explicitly by both suites |
+| `tools/feasibility.py` | Parameter feasibility instrument — reports `m`, `λ`, and **measured** build/solve cost |
+| `results/full_test_pre_entropy_fix.txt` | Full `test_icc.py` run before the Week 1 entropy fix (baseline) |
+| `results/full_test_post_fix.txt` | Full `test_icc.py` run after it |
+| `results/feasibility_sweep.csv` | Raw rows from `tools/feasibility.py` |
+| `docs/PLAN.md` | Fall 2026 semester plan |
+| `docs/WEEK1_FINDINGS.md` | What the Week 1 optimization pass changed and why |
 | `Written_Resources/` | The paper + the Spring 2026 report (PDFs, plus `extracted/` plain text) |
 
 ## Notation: paper ↔ code
@@ -54,51 +65,53 @@ Theorem 1: `m ≥ n + p + log_q(1/ε) − H_p(X) + max_R H_p(X_R)`, giving
 
 ## Running things
 
-Use the project venv (Python 3.11, `galois` + `numpy`):
+Use the project venv (Python 3.11, `galois` + `numpy`). Run from the repo root:
 
 ```bash
 .venv/bin/python main.py
-.venv/bin/python test_icc.py
+.venv/bin/python tests/test_regression.py          # ~8 s, run this first
+.venv/bin/python tests/test_icc.py                 # full suite, ~9 s
+.venv/bin/python tests/test_icc.py --fast          # ~2.5 s
+.venv/bin/python tools/feasibility.py --csv results/feasibility_sweep.csv
 ```
 
-**The full suite takes ~81 minutes.** Do not run it casually. `--fast` is parsed but
-currently skips nothing (`FAST_MODE` at `test_icc.py:58` is only used to print a
-banner) — fixing that is a good small task. To spot-check, import from `test_icc.py`
-and call a single `test_*` function.
+The full suite took ~81 min before the Week 1 pass and now takes ~9 s, so it is cheap to
+run. `--fast` genuinely reduces work (trial counts 10/5/50 → 2/2/5, drops the 500k
+dataset). To spot-check, import from `tests/test_icc.py` and call a single `test_*`.
 
 Cost drivers, in order:
-1. `compute_max_subset_p_entropy` is `C(n, r)` — superlinear blowup, caps `n` at ~12.
-2. Decoding solves a dense `λ × λ` `GF(q)` system; `λ = C(m+d, d)` grows fast in `d`
-   (`d=2 → λ≈171`, `d=4 → λ≈3876`, i.e. 1.4 s vs 448 s per trial).
-3. `get_information_superset` is brute force over all `C(λ+S, λ)` subsets — a
-   prototype only, effectively unrunnable. Replacing it is the main open work item.
+1. Decoding solves a `λ × λ` `GF(q)` system, `λ = C(m+d, d)`. The binding constraint is
+   **memory**, not time: the dense matrix is 1.7 GB at `n=250`. `M` is only ~0.5% nonzero
+   (`M[t,a] ≠ 0 ⟺ supp(a) ⊆ supp(t)`, so `C(2d,d)` nonzeros per row), so a sparse
+   representation is the unlock — see `docs/PLAN.md`.
+2. `build_monomial_matrix` — vectorized, but still the largest term at `n ≥ 150`
+   (16 s build vs 2.4 s solve). `Client` caches `M` across GD steps, so it is paid once.
+3. `get_information_superset` is brute force over all `C(λ+S, λ)` subsets — a prototype
+   only, effectively unrunnable. Out of scope for Fall 2026 (see `docs/PLAN.md`).
 
 ## Known open issues — flag these, don't silently "fix" them
 
 These are thesis-math decisions. Raise them; let Daniel decide.
 
-1. **Entropy is computed per-symbol, not over the length-`n` vector.**
-   Theorem 1 wants `H_p(X)` for `X ∈ F_q^n` (`≈ n·h` for i.i.d. data, `= n` when
-   uniform). `compute_p_entropy` instead estimates the empirical distribution over the
-   `q` alphabet symbols and returns `h ≈ 0.38`, not `n·h ≈ 3.8`. Same for
-   `compute_max_subset_p_entropy` (returns `≈ h`, not `r·h`). Consequence: the
-   `−H_p(X) + max_R H_p(X_R)` terms nearly cancel, so `m ≈ n + p + log_q(1/ε)` and
-   `m > n` in every small test — the opposite of the scheme's `m ≪ n` selling point.
-   Tell: the code can produce `max_R H_p(X_R) > H_p(X)`, which is impossible for the
-   true quantities. `compute_fast_iid_entropy` in `test_icc.py` (used only in Section 6)
-   *does* scale correctly by `n` and `r`, which is why only Section 6 shows `m ≪ n`.
-2. **Two entropy paths disagree.** The `test_icc.py` i.i.d. shortcut computes entropy
-   from the *true* sampling distribution; `utils.py` computes it from the *empirical*
-   distribution of one realization. Both are defensible, but they are not the same
-   estimator and should not be silently mixed.
-3. **`ε_c` exponent.** Code uses `q^(−max_R H_p(X_R))`, matching the Theorem 1
+1. **`ε_c` exponent.** Code uses `q^(−max_R H_p(X_R))`, matching the Theorem 1
    statement. The derivation at eq. (9)–(10) of the paper carries `q^(−max_R H_p(X_R)/p)`.
    Worth resolving against the authors.
-4. **`max(r, ...)` floor in `compute_required_m`** is justified in the report by the
-   Singleton bound, which came from the MDS/uniform predecessor scheme. Under ICC the
-   code is random, so the real justification is Remark 1 (key of size `≥ r` is necessary).
-5. **`d < m(q−1)` is never asserted** anywhere, though the scheme requires it.
-6. `main.py:12` still imports `generate_vandermonde_G`, which is unused.
+2. **The i.i.d. source assumption is now load-bearing.** `compute_max_subset_p_entropy`
+   returns `r·h` in closed form, which is exact only when coordinates are independent.
+   Rényi entropy of order `p ≥ 2` is **not** subadditive (unlike Shannon), so for
+   correlated features `Σ hᵢ` bounds `H_p(X)` in neither direction — the error is
+   unsigned. Theorem 1 needs a *lower* bound on `H_p(X)` and an *upper* bound on
+   `max_R H_p(X_R)`; either one backwards under-estimates `m` and breaks privacy.
+   Needs a ruling from Raviv before real (correlated) data. See `docs/WEEK1_FINDINGS.md` §4.
+3. **Two entropy estimators still coexist, now documented rather than mixed.**
+   `compute_max_subset_p_entropy` uses the source-model closed form;
+   `_compute_max_subset_p_entropy_empirical` is the old `C(n,r)` brute force, kept for
+   reference and explicitly **not** an oracle for the former. Don't use it to compute `m`.
+
+Resolved in the Week 1 pass (`week1-2-optimizations`) — do not re-report as bugs:
+per-symbol vs vector entropy scaling, the two entropy paths disagreeing, the
+`max(r, …)` justification (now Remark 1, not Singleton), the missing `d < m(q−1)`
+assertion, and the unused `generate_vandermonde_G` import.
 
 ## Working preferences
 

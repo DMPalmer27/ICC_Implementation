@@ -18,9 +18,11 @@ Description: Parameter feasibility instrument for the ICC scheme. Given the sche
     measure(), not estimate().
 
 Usage:
-    .venv/bin/python feasibility.py                 # default sweep, prints a table
-    .venv/bin/python feasibility.py --csv out.csv   # also write raw rows
+    .venv/bin/python tools/feasibility.py            # default sweep, prints a table
+    .venv/bin/python tools/feasibility.py --csv results/feasibility_sweep.csv
 """
+
+import _path  # noqa: F401  -- puts icc/ on sys.path; must precede the local imports
 
 import argparse
 import csv

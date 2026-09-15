@@ -4,6 +4,13 @@ Author: Daniel Palmer (d.m.palmer@wustl.edu)
 Description: This file contains the script which actually runs and tests an instance of the scheme
 """
 
+import sys
+from pathlib import Path
+
+# The implementation lives in icc/, which is a plain directory rather than an installed
+# package, so it is not on the import path by default. See tests/conftest.py.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "icc"))
+
 import galois
 import numpy as np
 from config import SystemContext

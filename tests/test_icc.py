@@ -24,9 +24,11 @@ Description:
                           using an exact O(1) i.i.d. entropy scaling shortcut.
 
 Usage:
-    python test_icc.py          # full suite (may take several minutes)
-    python test_icc.py --fast   # reduced trial counts, skips the 500k dataset
+    .venv/bin/python tests/test_icc.py          # full suite
+    .venv/bin/python tests/test_icc.py --fast   # reduced trial counts, skips the 500k dataset
 """
+
+import conftest  # noqa: F401  -- puts icc/ on sys.path; must precede the local imports
 
 import sys
 import math

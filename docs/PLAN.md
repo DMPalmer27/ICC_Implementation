@@ -67,7 +67,7 @@ With a common scale `f` for all three factors, `h ≈ (f+2)/(3f + log₂(2·n_s�
 
 ### Feasibility envelope (MEASURED, Week 2)
 
-`feasibility.py`, `q = 2³⁰+3`, `r = 5`, `p = 2`, `ε = 1e-6`, `d = 2`. Times are seconds on
+`tools/feasibility.py`, `q = 2³⁰+3`, `r = 5`, `p = 2`, `ε = 1e-6`, `d = 2`. Times are seconds on
 the dev machine; "warm" is the per-GD-step cost once the `Client` has cached `M`, which is
 the number that matters for a training run.
 

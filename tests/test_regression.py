@@ -12,8 +12,10 @@ Description: Fast regression checks for the Week 1 optimisation pass. Unlike tes
       5. the vectorised Server.store_data produces the same shares as the old loop
 
 Usage:
-    .venv/bin/python test_regression.py
+    .venv/bin/python tests/test_regression.py
 """
+
+import conftest  # noqa: F401  -- puts icc/ on sys.path; must precede the local imports
 
 import time
 import galois

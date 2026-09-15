@@ -1,6 +1,6 @@
 # Week 1 — what changed and why
 
-Baseline: `full_test_pre_entropy_fix.txt` (pre-fix) vs `full_test_post_fix.txt` (post-fix).
+Baseline: `results/full_test_pre_entropy_fix.txt` (pre-fix) vs `results/full_test_post_fix.txt` (post-fix).
 Both are full `test_icc.py` runs. **0 failures in both**, so nothing regressed; the numbers
 that moved are corrections, and they are the finding.
 
@@ -87,11 +87,11 @@ samples in column `j`, giving `H_p(X) = n_s·Σ_j h_j` and `max_R H_p(X_R) = r·
 - `--fast` now actually reduces work (trial counts 10/5/50 → 2/2/5, skips the 500k dataset)
   instead of only printing a banner.
 - Unused `generate_vandermonde_G` import dropped from `main.py`.
-- New `test_regression.py`: 19 checks in 8.4 s.
+- New `tests/test_regression.py`: 19 checks in 8.4 s.
 
 ## Carried into Week 2
 
 The `λ³` decode model should not appear in the paper. Measured: the interpolation matrix is
 `~0.5%` nonzero at `m=48`, because `M[t,a] ≠ 0 ⟺ supp(a) ⊆ supp(t)` gives exactly `C(2d,d)`
 nonzeros per row independent of `m`. Real solve at `λ=1225` is 0.16 s against 17.6 s for a
-dense random matrix of the same size. `feasibility.py` must measure, not model.
+dense random matrix of the same size. `tools/feasibility.py` must measure, not model.
