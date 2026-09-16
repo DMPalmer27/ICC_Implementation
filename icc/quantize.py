@@ -248,7 +248,7 @@ def from_field(z, q: int, total_f: int) -> np.ndarray:
 
     total_f is the sum of the fractional bits of every quantised factor in the computation,
     since degree-k products multiply the scales. For the least-squares gradient with the
-    query polynomial of docs/QUANTIZATION.md it is 2*f_X + f_w.
+    query polynomial of docs/QUANTIZATION.md section 5 it is 2*f_X + f_w.
 
     :param z: Field elements returned by Client.decode_result
     :param q: Field size
@@ -300,6 +300,84 @@ def choose_prime(magnitude_bound: float, warn_native: bool = True) -> int:
               f"{NATIVE_Q_MAX}; galois will fall back to dtype=object arithmetic "
               f"(~28x slower interpolation-matrix build, ~7x slower solve).")
     return q
+
+
+@dataclass(frozen=True)
+class QueryBudget:
+    """
+    Everything about FUTURE queries that has to be committed to BEFORE the data is uploaded.
+
+    This exists because of an ordering constraint that is easy to miss. The client uploads
+    x~ = x + kG in F_q^n and the admin immediately shards it to the lambda = C(m+d, d)
+    workers using the information set I_{d,m}. So by the time any polynomial is sent,
+    (q, m, d) are already baked into the stored shares and cannot be revised -- and m itself
+    was derived from q, since Theorem 1's terms are in log_q units. The storage-time chain is
+
+        budget  ->  B  ->  q  ->  entropy bounds in log_q units  ->  m  ->  lambda, G, shares
+
+    and every arrow points forward. Therefore q cannot be sized against the query that
+    happens to arrive; it must be sized against a DECLARED BOUND on every query that ever
+    will. That is what this class is: not a description of one gradient step, but a ceiling.
+
+    The constraint is one-sided, which is what makes it workable. A later query with smaller
+    f_w or smaller weights has a smaller magnitude and stays safely inside the window, so the
+    budget only has to be an upper bound. assert_admissible checks a query against it, and
+    the check is cheap and uses only public quantities, so the client can run it before
+    sending anything -- which matters because after upload it cannot detect a violation.
+
+    The degree d is the harshest entry, and it is structural rather than numeric: the shares
+    literally only support evaluation of polynomials in RM_q(d, m). A degree-3 query against
+    d = 2 shares is not inaccurate, it is undecodable, and no choice of q fixes it.
+
+    :param n_samples: Number of samples n_s
+    :param n_features: Number of features P
+    :param d: Maximum total degree of any future query
+    :param x_spec: Format the feature matrix is stored in
+    :param w_spec: CEILING on the weight format of any future query, not one step's format
+    :param y_spec: Format the labels are stored in; defaults to x_spec, which is required
+    """
+    n_samples: int
+    n_features: int
+    d: int
+    x_spec: FixedPointSpec
+    w_spec: FixedPointSpec
+    y_spec: Optional[FixedPointSpec] = None
+
+    def magnitude_bound(self) -> int:
+        """
+        The hard bound B on the integer result, over every query the budget admits.
+
+        :return: Bound B, suitable for choose_field_size
+        """
+        return gradient_bound_worst_case(self.n_samples, self.n_features, self.x_spec,
+                                         self.w_spec, self.y_spec)
+
+    def assert_admissible(self, w_codes, f_w: int):
+        """
+        Checks one query against the declared budget, before it is sent.
+
+        Two conditions, and together they imply the magnitude bound behind q still holds:
+        the query's scale must not exceed the declared one (f_w <= budget f_w, since the
+        label term carries a public 2^{f_w} multiplier), and the quantised weights must not
+        exceed the declared clip. Anything smaller is safe.
+
+        :param w_codes: Quantised weight vector for this query
+        :param f_w: Fractional bits this query's weights were quantised at
+        :raises ValueError: if the query exceeds what q was sized for
+        """
+        if f_w > self.w_spec.f:
+            raise ValueError(
+                f"query uses f_w = {f_w} but the storage-time budget declared "
+                f"f_w <= {self.w_spec.f}; q was sized for the smaller scale and the result "
+                f"can wrap. Re-upload with a larger budget, or lower f_w for this query."
+            )
+        worst = int(max(abs(int(v)) for v in np.atleast_1d(np.asarray(w_codes)).ravel()))
+        if worst > self.w_spec.max_int:
+            raise ValueError(
+                f"query has max |w_hat| = {worst} but the budget declared "
+                f"<= {self.w_spec.max_int} (clip {self.w_spec.clip} at f_w = "
+                f"{self.w_spec.f}); clip the weights to the declared bound before sending."
+            )
 
 
 @dataclass(frozen=True)
@@ -425,7 +503,7 @@ def gradient_bound_worst_case(n_samples: int, n_features: int,
     """
     Hard bound on the integer least-squares gradient, from the clip bounds alone.
 
-    For the query polynomial of docs/QUANTIZATION.md,
+    For the query polynomial of docs/QUANTIZATION.md section 5,
 
         g_j = sum_i ( sum_k xq[i,k] * wq[k]  -  2^{f_w} * yq[i] ) * xq[i,j]
 
@@ -443,6 +521,11 @@ def gradient_bound_worst_case(n_samples: int, n_features: int,
     it assumes every sample simultaneously attains the clip bound. Measured 691x loose
     (9.4 bits of q) on a seeded synthetic case and 4.2 bits on the diabetes subsample --
     see gradient_bound_data_dependent for the tighter, leakier alternative.
+
+    ORDERING. w_spec here is a CEILING declared before upload, not the format of the query
+    that is about to be sent -- q is frozen when the data is stored, so it cannot be sized
+    against a query that has not arrived yet. Prefer QueryBudget.magnitude_bound(), which
+    names that and gives you assert_admissible() to police later queries against it.
 
     :param n_samples: Number of samples n_s
     :param n_features: Number of features P
@@ -475,7 +558,8 @@ def gradient_bound_data_dependent(x_codes, y_codes, w_spec: FixedPointSpec) -> i
     is a leakage channel Theorem 1 does not cover, since the theorem conditions on the
     scheme parameters. Rounding q up to a coarse public grid (say the next power of two)
     caps the leaked quantity at a few bits, but it does not make it zero. Open question 7 of docs/PLAN.md;
-    see also section 6.1 of docs/QUANTIZATION.md. Use gradient_bound_worst_case unless that is resolved.
+    see also section 7.1 of docs/QUANTIZATION.md. Use gradient_bound_worst_case
+    unless that is resolved.
 
     :param x_codes: Quantised feature matrix, shape (n_s, P), integer codes
     :param y_codes: Quantised labels, shape (n_s,), integer codes
@@ -564,7 +648,7 @@ def entropy_bounds(n: int, r: int, q: int, spec: FixedPointSpec,
     PROPOSED replacement for real data, and it is not a third estimator to be mixed with
     those two -- it computes bounds, not estimates. It trades an unverifiable independence
     assumption for a single scalar density bound. It still needs Raviv's sign-off before
-    any privacy claim rests on it; see open question 1 of docs/PLAN.md and section 7 of
+    any privacy claim rests on it; see open question 1 of docs/PLAN.md and section 8 of
     docs/QUANTIZATION.md.
 
     :param n: Data length

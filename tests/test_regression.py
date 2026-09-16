@@ -10,9 +10,9 @@ Description: Fast regression checks for the Week 1 optimisation pass. Unlike tes
       3. the Theorem 1 entropy quantities are mutually consistent
       4. compute_required_m rejects impossible inputs instead of returning a bad m
       5. the vectorised Server.store_data produces the same shares as the old loop
-      6-9. quantisation: fixed-point round trips, the balanced-lift sign convention, the
-           two no-wraparound bounds, the direction of the entropy bounds, and a quantised
-           gradient decoding exactly through the real scheme
+      6-10. quantisation: fixed-point round trips, the balanced-lift sign convention, the
+            two no-wraparound bounds, the storage-time query budget, the direction of the
+            entropy bounds, and a quantised gradient decoding exactly through the scheme
 
 Usage:
     .venv/bin/python tests/test_regression.py
@@ -31,6 +31,7 @@ from server import Server
 from quantize import (
     POWER_OF_TWO_GRID,
     FixedPointSpec,
+    QueryBudget,
     assert_representable,
     choose_field_size,
     choose_prime,
@@ -402,8 +403,51 @@ def test_gradient_bounds_are_valid():
           f"{coarse.leakage_bits:.2f} vs {leakage_budget_bits(0.0016, public.q):.4f} bits")
 
 
+def test_query_budget_ordering():
+    print("\n8. Storage-time budget admits later queries, or refuses them")
+    # q is frozen at upload, so it is sized against a declared ceiling on future queries
+    budget = QueryBudget(n_samples=25, n_features=3, d=2,
+                         x_spec=FixedPointSpec(f=8, clip=4.0),
+                         w_spec=FixedPointSpec(f=0, clip=4.0))
+    B = budget.magnitude_bound()
+    check("budget reproduces the worst-case bound it is built from",
+          B == gradient_bound_worst_case(25, 3, budget.x_spec, budget.w_spec))
+
+    w_ok = to_integer(np.array([1.2, -3.1, 0.4]), budget.w_spec)
+    check("a query inside the declared ceiling is admitted",
+          not _raises(lambda: budget.assert_admissible(w_ok, 0)))
+    check("raising f_w after upload is refused",
+          _raises(lambda: budget.assert_admissible(w_ok, 4)))
+    check("weights past the declared clip are refused",
+          _raises(lambda: budget.assert_admissible(np.array([9, 1, 1]), 0)))
+
+    # The one-sidedness is what makes a ceiling workable: anything smaller must stay safe
+    loose = QueryBudget(n_samples=25, n_features=3, d=2,
+                        x_spec=FixedPointSpec(f=8, clip=4.0),
+                        w_spec=FixedPointSpec(f=8, clip=4.0))
+    check("a looser ceiling costs field size but admits the tight query too",
+          loose.magnitude_bound() > B
+          and not _raises(lambda: loose.assert_admissible(w_ok, 0)))
+
+    # Every admitted query must actually fit the window q was sized for
+    q = choose_field_size(B, warn_native=False).q
+    rng = np.random.default_rng(17)
+    fits = True
+    for _ in range(20):
+        Xq = to_integer(rng.standard_t(2, size=(25, 3)), budget.x_spec)
+        yq = to_integer(rng.standard_t(2, size=25), budget.x_spec)
+        wq = to_integer(rng.standard_t(2, size=3), budget.w_spec)
+        budget.assert_admissible(wq, budget.w_spec.f)
+        for j in range(3):
+            g = int(sum((sum(int(Xq[i, k]) * int(wq[k]) for k in range(3))
+                         - 2 ** budget.w_spec.f * int(yq[i])) * int(Xq[i, j])
+                        for i in range(25)))
+            fits &= abs(g) <= (q - 1) // 2
+    check("20 admitted queries all land inside the balanced window", fits)
+
+
 def test_entropy_bounds_directions():
-    print("\n8. Quantisation entropy bounds point the way Theorem 1 needs")
+    print("\n9. Quantisation entropy bounds point the way Theorem 1 needs")
     spec = FixedPointSpec(f=8, clip=4.0)
     q = int(galois.next_prime(2 ** 30))
     n, r = 40, 5
@@ -434,7 +478,7 @@ def test_entropy_bounds_directions():
 
 
 def test_quantized_gradient_decodes_exactly():
-    print("\n9. A quantised gradient survives the scheme exactly")
+    print("\n10. A quantised gradient survives the scheme exactly")
     n_samples, n_features, f_X, f_w = 4, 2, 6, 2
     x_spec = FixedPointSpec(f=f_X, clip=4.0)
     w_spec = FixedPointSpec(f=f_w, clip=4.0)
@@ -497,6 +541,7 @@ def main():
     test_server_shares_match_legacy()
     test_quantization_round_trip()
     test_gradient_bounds_are_valid()
+    test_query_budget_ordering()
     test_entropy_bounds_directions()
     test_quantized_gradient_decodes_exactly()
 

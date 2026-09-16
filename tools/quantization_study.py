@@ -52,6 +52,7 @@ from quantize import (
     SUP_DENSITY_STANDARD_NORMAL,
     FixedPointSpec,
     assert_representable,
+    QueryBudget,
     choose_field_size,
     choose_prime,
     codes_to_field,
@@ -412,7 +413,11 @@ def study_end_to_end(n_samples: int = 4, n_features: int = 2, f_X: int = 8, f_w:
 
     Xq, yq, wq = to_integer(X, x_spec), to_integer(y, x_spec), to_integer(w, w_spec)
 
-    B = gradient_bound_worst_case(n_samples, n_features, x_spec, w_spec)
+    # Declared BEFORE upload: q, m and d are frozen into the shares, so the budget is a
+    # ceiling on every future query rather than a description of this one.
+    budget = QueryBudget(n_samples=n_samples, n_features=n_features, d=2,
+                         x_spec=x_spec, w_spec=w_spec)
+    B = budget.magnitude_bound()
     q = choose_prime(B)
     GF = galois.GF(q)
     ctx = SystemContext(q=q, n=n, d=2, r=3, p=P_ORDER, epsilon=1e-4)
@@ -422,6 +427,8 @@ def study_end_to_end(n_samples: int = 4, n_features: int = 2, f_X: int = 8, f_w:
 
     print(f"  n = {n}, f_X = {f_X}, f_w = {f_w}, clip = {CLIP:.0f}")
     print(f"  worst-case |g| bound B = {B:,}  ->  q = {q:,} (log2 q = {math.log2(q):.1f})")
+    print(f"  budget declared at upload: d = {budget.d}, f_w <= {budget.w_spec.f}, "
+          f"|w| <= {budget.w_spec.clip:.0f}")
     print(f"  h = {ctx.H_p_X / n:.3f}, m = {ctx.m}, lambda = {lam}, "
           f"eps_c = {compute_leakage_bound(ctx):.6f}")
 
@@ -430,6 +437,10 @@ def study_end_to_end(n_samples: int = 4, n_features: int = 2, f_X: int = 8, f_w:
     client, server = Client(ctx, GF), Server(ctx, GF)
     G = generate_random_G(GF, ctx.m, n)
     server.store_data(client.encode_data(x_field, G), G)
+
+    # Police the query against the declared budget before sending it -- the only point at
+    # which the client can, since after upload it cannot detect a wrap.
+    budget.assert_admissible(wq, f_w)
 
     scale = 2.0 ** (2 * f_X + f_w)
     g_float = (X @ w - y) @ X

@@ -109,6 +109,7 @@ seed = 0; every number below is reproducible from this script
 ==============================================================================
   n = 12, f_X = 8, f_w = 4, clip = 4
   worst-case |g| bound B = 603,979,776  ->  q = 1,207,959,559 (log2 q = 30.2)
+  budget declared at upload: d = 2, f_w <= 4, |w| <= 4
   h = 0.309, m = 12, lambda = 91, eps_c = 0.012650
 
   j     decoded (lifted)       integer oracle  exact   decoded/2^s    float grad  err vs float  err vs dequant

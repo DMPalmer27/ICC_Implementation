@@ -113,7 +113,7 @@ These are thesis-math decisions. Raise them; let Daniel decide.
    upper-bounds `max_R H_p(X_R)` by `r·log_q(levels)` — the directions Theorem 1 needs. The
    upper bound is assumption-free; the lower bound survives correlation and is a candidate
    fix for issue 2. Do not mix it with the two estimators below. Needs Raviv's ruling —
-   see `docs/QUANTIZATION.md` §7 and open questions 7–9 in `docs/PLAN.md`.
+   see `docs/QUANTIZATION.md` §8 and open questions 7–9 in `docs/PLAN.md`.
 4. **Two entropy estimators still coexist, now documented rather than mixed.**
    `compute_max_subset_p_entropy` uses the source-model closed form;
    `_compute_max_subset_p_entropy_empirical` is the old `C(n,r)` brute force, kept for

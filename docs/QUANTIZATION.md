@@ -102,7 +102,7 @@ neither paper embeds reals, so neither has any analogue of `B`, clipping, or sca
 | `f_X`, `f_y`, `f_w` | fractional bits of data, labels, weights; `f_y = f_X` required | §5 |
 | `A`, `A_w` | clip bounds in σ, for data and weights | `FixedPointSpec.clip` |
 | `x̂`, `ŷ`, `ŵ` | integer codes after clip-scale-round | `quantize.to_integer` |
-| **`B`** | **hard bound on the magnitude of the INTEGER result, pre-reduction** | §6, `gradient_bound_*` |
+| **`B`** | **hard bound on the magnitude of the INTEGER result, pre-reduction** | §7, `gradient_bound_*` |
 | `ρ_max` | bound on the source probability density | §7, `sup_density` |
 | `P_sat` | probability mass on one clip boundary | §7, `saturation_mass` |
 | `L`, `q_i` | number of RNS primes and the primes themselves | §4E |
@@ -260,7 +260,7 @@ storage changes.
 
 Three consequences, two good:
 
-- Range becomes bounded by construction, so clipping and its saturation atom (§6) disappear
+- Range becomes bounded by construction, so clipping and its saturation atom (§8) disappear
   and the magnitude bound tightens.
 - Entropy becomes *known*, not estimated or bounded — the strongest possible position for
   Theorem 1.
@@ -348,7 +348,65 @@ precision, not by `f_X`.
 
 ---
 
-## 6. Field size: the decodability obligation
+## 6. Storage-time ordering: `q` is sized against a budget, not a query
+
+**The data is uploaded before any polynomial is sent.** That is not a detail of the
+implementation, it is the shape of the protocol, and it constrains `q` more than §7's
+magnitude bound suggests on its own.
+
+At upload the client computes `x̃ = x + kG ∈ F_q^n` and the admin immediately shards it to
+`λ = C(m+d, d)` workers using the information set `I_{d,m}` (`Server.store_data` →
+`get_information_set(q, m, d)`). So by the time any query exists, `q`, `m` and `d` are
+already baked into the stored shares. And `m` was itself derived from `q`, since Theorem 1's
+terms are in `log_q` units. The storage-time chain is
+
+```
+budget  →  B  →  q  →  entropy bounds in log_q units  →  m  →  λ, G, shares
+```
+
+and every arrow points forward. Nothing downstream can revise anything upstream.
+
+**Consequence: `q` must bound every query the client will ever send, not the one it happens
+to send first.** So the thing to declare at upload is a *ceiling* — `quantize.QueryBudget`:
+
+```python
+budget = QueryBudget(n_samples=25, n_features=3, d=2,
+                     x_spec=FixedPointSpec(f=8, clip=4.0),    # storage format
+                     w_spec=FixedPointSpec(f=0, clip=4.0))    # CEILING on future queries
+q = choose_field_size(budget.magnitude_bound()).q             # 681,574,423
+```
+
+`w_spec` here is not one gradient step's weight format. It is the largest weight format any
+future step is permitted to use.
+
+**The constraint is one-sided, which is what makes it workable.** A later query with smaller
+`f_w` or smaller weights produces a smaller integer and stays safely inside the window, so
+the budget only has to be an upper bound — it does not have to be tight.
+`budget.assert_admissible(ŵ, f_w)` polices it, checking `f_w ≤` declared and
+`max|ŵ| ≤` declared. Both conditions together re-establish the magnitude bound. The check is
+cheap and uses only public quantities, so the client runs it *before sending* — which is the
+only time it can, since after upload it cannot detect a violation (§3's R3).
+
+**Enforcement, in practice.** The weight clip `A_w` is the mechanism: clipping `w` to the
+declared bound at every step makes admissibility automatic. If the true optimum lies outside
+`A_w`, training converges to the clipped solution — a utility cost, not a correctness
+failure. With standardised features `w = O(1)`, so `A_w = 4` is generous.
+
+**The degree is the harsh entry, and it is structural rather than numeric.** The shares only
+support evaluation of polynomials in `RM_q(d, m)`. A degree-3 query against `d = 2` shares
+is not inaccurate, it is *undecodable*, and no choice of `q` repairs it. Declaring `d = 3`
+up front is possible but expensive: it raises `λ = C(m+d, d)`, and by §11 it lowers the
+entropy ceiling to `h < 1/3`. Committing to `d = 2` is committing to quadratic queries for
+the life of the upload.
+
+**What repeated queries do not do.** Each query is decoded independently, so magnitudes do
+not accumulate across the `T` gradient steps — every query needs `|ĝⱼ| ≤ (q−1)/2`
+individually, and `T` does not enter `B`. (What *does* accumulate across steps is leakage,
+which is next semester's question, not this one.)
+
+---
+
+## 7. Field size: the decodability obligation
 
 Reduction mod `q` is a ring homomorphism, so the decoded element equals the true integer
 gradient mod `q`. Lifting is exact **iff** that integer never leaves `[−(q−1)/2, (q−1)/2]`.
@@ -374,7 +432,7 @@ f_w = 0` stay under the native-arithmetic ceiling.
 
 **But it leaks, and the arithmetic says decisively not to use it.**
 
-### 6.1 How data leaks into `q`
+### 7.1 How data leaks into `q`
 
 `q` is public — the provider cannot do field arithmetic without it. So if `q` was computed
 from the data, publishing it is a side channel, and it is one Theorem 1 does not cover:
@@ -388,7 +446,7 @@ entire data vector. At `n_s = 1` that is very nearly a direct read of `|x|`; at 
 is an aggregate, but "aggregate" is not a guarantee, and nothing in the analysis bounds what
 an `r`-subset contributes to it.
 
-### 6.2 The rule, and why it is the boring one
+### 7.2 The rule, and why it is the boring one
 
 `quantize.choose_field_size` implements three policies and returns the leakage accounting
 alongside `q`, so the comparison cannot be skipped:
@@ -414,7 +472,7 @@ bits of q it saves                                  ->  3.34
 ```
 
 **Spending 5.4 bits of side channel to save 3.3 bits of `q` is 114× the entire leakage the
-scheme exists to bound.** It is not a close call, and it settles a question the tables in §9
+scheme exists to bound.** It is not a close call, and it settles a question the tables in §10
 otherwise leave open: use the public-format bound, accept the looser `q`, and treat
 `gradient_bound_data_dependent` as an instrument for *quantifying* what is given up rather
 than as a configuration to ship.
@@ -427,7 +485,7 @@ the public-format policy that the distinction stops mattering.
 
 ---
 
-## 7. Entropy: what to feed Theorem 1, and in which direction
+## 8. Entropy: what to feed Theorem 1, and in which direction
 
 Theorem 1 **subtracts** `H_p(X)` and **adds** `max_R H_p(X_R)`. So it needs a *lower* bound
 on the first and an *upper* bound on the second. Either one backwards under-estimates `m`
@@ -510,7 +568,7 @@ third entry in the `utils.py` estimator zoo. Do not mix it with the two that are
 
 ---
 
-## 8. Implementation ceiling: `log2 q ≤ 31.5`
+## 9. Implementation ceiling: `log2 q ≤ 31.5`
 
 `galois` keeps native `uint32` arithmetic (`ufunc_mode='jit-calculate'`) only while `q²`
 fits in `int64`, i.e. `q ≤ ⌊sqrt(2^63)⌋ = 3037000499`. One prime above that it silently
@@ -536,7 +594,7 @@ it translates into a real parameter constraint: under the worst-case magnitude b
 
 ---
 
-## 9. The measured `f → q → h → m → λ` chain
+## 10. The measured `f → q → h → m → λ` chain
 
 `n = 100` (25 samples × 3 features + 25 labels), `r = 5`, `p = 2`, `ε = 1e-6`, `d = 2`,
 `A = 4σ`, diabetes subsample. Full grid in `results/quantization_budget.csv`.
@@ -570,7 +628,7 @@ f_w = 4` is the next native-feasible point at `h = 0.250`.
 
 ---
 
-## 10. The structural ceiling: `h < 1/d`
+## 11. The structural ceiling: `h < 1/d`
 
 This is the most important limitation of the whole approach, and it is not a tuning problem.
 
@@ -602,7 +660,7 @@ carries.
 **Consequence.** With a single prime field, `m ≥ n(1 − 1/d) + …`, so at `d = 2` the key is
 always **more than half the data length**. The `m ≪ n` regime of the paper's Example 1
 (which assumes `H_p(X) = n − 1`, i.e. data nearly uniform over `F_q`) is *unreachable* by
-fixed point over one prime, at any precision, for any dataset. Every row of §9 is consistent
+fixed point over one prime, at any precision, for any dataset. Every row of §10 is consistent
 with this: the best `h` in the whole grid is 0.401.
 
 This should be stated plainly in the paper rather than buried, because it is the honest
@@ -617,10 +675,10 @@ that.
 
 ---
 
-## 11. Open questions
+## 12. Open questions
 
 Continuing the numbering in `docs/PLAN.md` (1–6 there). Questions 1 and 5 there are both
-directly affected by this document — 1 has a proposed resolution in §7, and 5 is now more
+directly affected by this document — 1 has a proposed resolution in §8, and 5 is now more
 valuable than its Week-8 slot suggests.
 
 7. **Does choosing `q` from the data leak?** The data-dependent magnitude bound is worth 4.2
@@ -639,13 +697,13 @@ valuable than its Week-8 slot suggests.
 
 ---
 
-## 12. What this changes in the plan
+## 13. What this changes in the plan
 
 - Week 3 is done; Week 4's `quantize.py`, round-trip tests and overflow detection are
   implemented and verified (study D), so W4 reduces to measuring error-vs-`f` on the target
   dataset and folding the codec into the Week 5 gradient path.
 - The Week 8 CRT/RNS item should be **asked about now** (open question 5), because `h_i = 1`
-  makes `m` independent of `n` *and* removes the need for the entropy modelling in §7
+  makes `m` independent of `n` *and* removes the need for the entropy modelling in §8
   entirely. It is no longer an optional efficiency extra; it is the parameter regime the
   scheme wants to live in.
 - The `λ³` correction in PLAN.md has a sibling here: the `h ≈ 1/3` "structural" figure was
