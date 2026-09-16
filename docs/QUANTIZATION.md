@@ -45,7 +45,7 @@ one of them is free:
   `h_lower_bits / log2 q`, because the bounds of §6 are naturally derived in bits.
 - **Calling `h` "per-symbol" and writing `H_p(X) = n·h` is the i.i.d. assumption**, since it
   needs additivity of Rényi entropy over coordinates. That is CLAUDE.md open issue 2 /
-  PLAN.md open question 1, and §6 is about not depending on it: the joint form of the
+  PLAN.md open question 1, and §7 is about not depending on it: the joint form of the
   density bound gives `H_p(X)` directly, with no per-symbol decomposition at all.
 
 With that caveat, `m ≈ n(1 − h) + r·h + p + log_q(1/ε)`. A field that is 10 bits larger
@@ -63,7 +63,7 @@ Three further constraints make this setting specific:
    never holds the data again, so at decode time a wrapped result is indistinguishable from
    a correct one — there is no invariant to check, no second party to compare against. Every
    MPC paper's "assume `q` is large enough to avoid wraparound" is, here, a *hard proof
-   obligation discharged at quantisation time*. This is what forces clipping (§4).
+   obligation discharged at quantisation time*. This is what forces clipping (§5).
 2. **One-shot storage, many queries.** `x̃` is written once and serves every gradient step.
    Any parameter the *storage* quantisation depends on is frozen for the whole training run;
    only the polynomial changes per step. This cleanly splits the scales into storage
@@ -80,7 +80,61 @@ continuous and the model is public.
 
 ---
 
-## 2. Requirements
+## 2. Notation, and where each symbol comes from
+
+Nothing in this document may silently look like paper notation when it is not, so:
+
+**From the 2024 paper** (Deng–Ramkumar–Raviv, *Perfect Subset Privacy in Polynomial
+Computation*) — the scheme structure: `λ(q,d,m) = C(m+d,d)` worker count, `I_{d,m}`
+information set of `RM_q(d,m)`, `G`, `k`, `x̃`.
+
+**From the 2025 non-uniform paper** (Tarnopolsky–Deng–Ramkumar–Raviv–Cohen) — the privacy
+analysis: `q, n, m, d, r`, entropy order `p`, smoothing budget `ε`, confidence `a`, leakage
+bound `ε_c`, and `H_p(·)` as defined in its Appendix A with a **base-`q`** logarithm.
+
+**Introduced by this project, not in either paper.** The whole quantisation layer is new —
+neither paper embeds reals, so neither has any analogue of `B`, clipping, or scales.
+
+| symbol | meaning | defined in |
+|---|---|---|
+| `h` | per-symbol entropy in `log_q` units, `H_p(X)/n` | repo convention, `utils.compute_symbol_p_entropy` |
+| `n_s`, `P` | samples, features; `n = n_s(P+1)` with labels stored too | §5 |
+| `f_X`, `f_y`, `f_w` | fractional bits of data, labels, weights; `f_y = f_X` required | §5 |
+| `A`, `A_w` | clip bounds in σ, for data and weights | `FixedPointSpec.clip` |
+| `x̂`, `ŷ`, `ŵ` | integer codes after clip-scale-round | `quantize.to_integer` |
+| **`B`** | **hard bound on the magnitude of the INTEGER result, pre-reduction** | §6, `gradient_bound_*` |
+| `ρ_max` | bound on the source probability density | §7, `sup_density` |
+| `P_sat` | probability mass on one clip boundary | §7, `saturation_mass` |
+| `L`, `q_i` | number of RNS primes and the primes themselves | §4E |
+
+**`B` deserves the emphasis**, because the obligation it encodes has no counterpart in
+either paper. Both papers start with `X` already a random variable over `F_q^n`, so nothing
+can wrap and the question never arises. Their "the computation results can be reliably
+decoded" is a *field-level* statement: the user recovers `g` by interpolating it from `λ`
+evaluations on an information set, which needs `M` to be full rank. Quantisation adds a
+**second, independent** decodability obligation at the integer level — that the true integer
+result never leaves the balanced window — and `B` is the quantity that discharges it. Both
+must hold; §3's R2 is the second one, and study D checks them separately.
+
+Formally: let `ĝ_j ∈ Z` be the exact integer value of the query polynomial on the integer
+codes. `B` is any number with `|ĝ_j| ≤ B` for every component `j` and every admissible
+weight vector. The balanced window holds `2B+1` distinct integers, so the requirement is
+
+```
+B ≤ (q−1)/2      equivalently      q ≥ 2B + 1
+```
+
+At the recommended parameters `B = 340,787,200` and `q = 681,574,423`.
+
+**Two notation collisions to fix before the paper.** (i) `M` is the interpolation matrix
+everywhere else in this project, so the density bound is written `ρ_max` here, not `M`. (ii)
+`p` is the entropy order in the paper, but `docs/PLAN.md` also uses `p` for the feature
+count ("summed over `n_s·p` terms"). This document uses `P` for features, which
+disambiguates only by case. Pick a third symbol before either appears in a figure caption.
+
+---
+
+## 3. Requirements
 
 | | Requirement |
 |---|---|
@@ -92,7 +146,7 @@ continuous and the model is public.
 
 ---
 
-## 3. Survey of candidate embeddings
+## 4. Survey of candidate embeddings
 
 ### A. Fixed point with balanced residues — **recommended**
 
@@ -124,7 +178,7 @@ divide by `2^f`.
 >
 > Note where the constraint comes from: the ICC scheme is stated over a general `F_q` and
 > its Reed–Muller machinery works there. **Primality is a constraint the quantisation layer
-> imposes on the scheme**, and the paper should say so. The RNS variant of §3E is the one
+> imposes on the scheme**, and the paper should say so. The RNS variant of §4E is the one
 > way to relax it — a product of *prime* fields, `Z/∏q_i ≅ ∏F_{q_i}`, not an extension
 > field.
 
@@ -248,7 +302,7 @@ is cheapest, and it frames quantisation as the *price* of continuous data.
 
 ---
 
-## 4. The recommended design
+## 5. The recommended design
 
 **Storage** (`n = n_s(P+1)` symbols: the flattened feature matrix followed by the labels).
 
@@ -294,7 +348,7 @@ precision, not by `f_X`.
 
 ---
 
-## 5. Field size: the decodability obligation
+## 6. Field size: the decodability obligation
 
 Reduction mod `q` is a ring homomorphism, so the decoded element equals the true integer
 gradient mod `q`. Lifting is exact **iff** that integer never leaves `[−(q−1)/2, (q−1)/2]`.
@@ -320,7 +374,7 @@ f_w = 0` stay under the native-arithmetic ceiling.
 
 **But it leaks, and the arithmetic says decisively not to use it.**
 
-### 5.1 How data leaks into `q`
+### 6.1 How data leaks into `q`
 
 `q` is public — the provider cannot do field arithmetic without it. So if `q` was computed
 from the data, publishing it is a side channel, and it is one Theorem 1 does not cover:
@@ -334,7 +388,7 @@ entire data vector. At `n_s = 1` that is very nearly a direct read of `|x|`; at 
 is an aggregate, but "aggregate" is not a guarantee, and nothing in the analysis bounds what
 an `r`-subset contributes to it.
 
-### 5.2 The rule, and why it is the boring one
+### 6.2 The rule, and why it is the boring one
 
 `quantize.choose_field_size` implements three policies and returns the leakage accounting
 alongside `q`, so the comparison cannot be skipped:
@@ -360,7 +414,7 @@ bits of q it saves                                  ->  3.34
 ```
 
 **Spending 5.4 bits of side channel to save 3.3 bits of `q` is 114× the entire leakage the
-scheme exists to bound.** It is not a close call, and it settles a question the tables in §8
+scheme exists to bound.** It is not a close call, and it settles a question the tables in §9
 otherwise leave open: use the public-format bound, accept the looser `q`, and treat
 `gradient_bound_data_dependent` as an instrument for *quantifying* what is given up rather
 than as a configuration to ship.
@@ -373,7 +427,7 @@ the public-format policy that the distinction stops mattering.
 
 ---
 
-## 6. Entropy: what to feed Theorem 1, and in which direction
+## 7. Entropy: what to feed Theorem 1, and in which direction
 
 Theorem 1 **subtracts** `H_p(X)` and **adds** `max_R H_p(X_R)`. So it needs a *lower* bound
 on the first and an *upper* bound on the second. Either one backwards under-estimates `m`
@@ -395,13 +449,14 @@ question 1 is simply closed.
 every order at once. Two kinds of atom compete:
 
 ```
-interior cell:     mass ≤ 2^-f · M        →  f − log2 M          bits
+interior cell:     mass ≤ 2^-f · ρ_max    →  f − log2 ρ_max      bits
 saturation atom:   mass ≤ P_sat           →  −log2 P_sat         bits   (independent of f)
 
-H_p(symbol) ≥ min( f − log2 M,  −log2 P_sat )
+H_p(symbol) ≥ min( f − log2 ρ_max,  −log2 P_sat )
 ```
 
-where `M` bounds the source density. For standardised features `M = 1/sqrt(2π)`, giving
+where `ρ_max` bounds the source density. For standardised features
+`ρ_max = 1/sqrt(2π)`, giving
 `f + 1.325` bits.
 
 *Tightness* (study A): against the exact discretised-Gaussian entropy the interior term is
@@ -413,7 +468,7 @@ f = 16` the exact `H_8` is **16.93 bits, below** the interior term `17.33`: the 
 atom (mass `3.2e-5`) has overtaken a typical interior cell (mass `6.1e-6`). Dropping the
 saturation term there would have over-estimated `H_p(X)` and under-estimated `m` — failure
 in the unsafe direction. The fix is to widen the clip, not to weaken the bound: keep
-`P_sat ≤ 2^-f · M`, which needs
+`P_sat ≤ 2^-f · ρ_max`, which needs
 
 | `f` | 8 | 12 | 16 | 20 | 24 |
 |---|---|---|---|---|---|
@@ -437,11 +492,11 @@ through `f_X = 12`; past that, widen rather than weaken the bound.
 in closed form, exact only for independent coordinates, and Rényi entropy of order `p ≥ 2`
 is not subadditive — so for correlated features `Σ h_i` bounds `H_p(X)` in neither
 direction. The density bound has no such problem: applied to the **joint** density with
-`M_n` bounding it,
+`ρ_max,n` bounding it,
 
 ```
-H_p(X) ≥ n·f − log2 M_n     bits,        and for a Gaussian source
-−log2 M_n = h_diff(X) − 0.721·n = (n/2)log2(2π) + (1/2)log2|Σ|
+H_p(X) ≥ n·f − log2 ρ_max,n   bits,      and for a Gaussian source
+−log2 ρ_max,n = h_diff(X) − 0.721·n = (n/2)log2(2π) + (1/2)log2|Σ|
 ```
 
 so correlation is paid for automatically through `log2|Σ|`, with no independence assumption
@@ -455,7 +510,7 @@ third entry in the `utils.py` estimator zoo. Do not mix it with the two that are
 
 ---
 
-## 7. Implementation ceiling: `log2 q ≤ 31.5`
+## 8. Implementation ceiling: `log2 q ≤ 31.5`
 
 `galois` keeps native `uint32` arithmetic (`ufunc_mode='jit-calculate'`) only while `q²`
 fits in `int64`, i.e. `q ≤ ⌊sqrt(2^63)⌋ = 3037000499`. One prime above that it silently
@@ -471,7 +526,7 @@ a training run in seconds and one in minutes, and it doubles the memory that PLA
 identifies as the binding constraint at `n ≥ 150`.
 
 This is a **tooling** limit, not a limit of the scheme, and the paper should say so: a
-Montgomery or Barrett backend, or the RNS design of §3E, removes it. But it binds today, and
+Montgomery or Barrett backend, or the RNS design of §4E, removes it. But it binds today, and
 it translates into a real parameter constraint: under the worst-case magnitude bound at
 `n_s = 25, P = 3, A = 4`,
 
@@ -481,7 +536,7 @@ it translates into a real parameter constraint: under the worst-case magnitude b
 
 ---
 
-## 8. The measured `f → q → h → m → λ` chain
+## 9. The measured `f → q → h → m → λ` chain
 
 `n = 100` (25 samples × 3 features + 25 labels), `r = 5`, `p = 2`, `ε = 1e-6`, `d = 2`,
 `A = 4σ`, diabetes subsample. Full grid in `results/quantization_budget.csv`.
@@ -515,7 +570,7 @@ f_w = 4` is the next native-feasible point at `h = 0.250`.
 
 ---
 
-## 9. The structural ceiling: `h < 1/d`
+## 10. The structural ceiling: `h < 1/d`
 
 This is the most important limitation of the whole approach, and it is not a tuning problem.
 
@@ -547,14 +602,14 @@ carries.
 **Consequence.** With a single prime field, `m ≥ n(1 − 1/d) + …`, so at `d = 2` the key is
 always **more than half the data length**. The `m ≪ n` regime of the paper's Example 1
 (which assumes `H_p(X) = n − 1`, i.e. data nearly uniform over `F_q`) is *unreachable* by
-fixed point over one prime, at any precision, for any dataset. Every row of §8 is consistent
+fixed point over one prime, at any precision, for any dataset. Every row of §9 is consistent
 with this: the best `h` in the whole grid is 0.401.
 
 This should be stated plainly in the paper rather than buried, because it is the honest
 answer to "does ICC work on real-valued data" — it works, correctly and verifiably, but the
 storage overhead is `Θ(n)` rather than `o(n)`, and quantisation is the reason.
 
-It is also the argument that turns §3E from an optimisation into a necessity. RNS breaks the
+It is also the argument that turns §4E from an optimisation into a necessity. RNS breaks the
 ceiling because it decouples the two roles of `q`: the *product* `∏ q_i` covers the dynamic
 range while each *individual* `q_i` is chosen no larger than the per-symbol entropy, giving
 `h_i = 1` and `m_i` independent of both `n` and `d`. Nothing else in the design space does
@@ -562,10 +617,10 @@ that.
 
 ---
 
-## 10. Open questions
+## 11. Open questions
 
 Continuing the numbering in `docs/PLAN.md` (1–6 there). Questions 1 and 5 there are both
-directly affected by this document — 1 has a proposed resolution in §6, and 5 is now more
+directly affected by this document — 1 has a proposed resolution in §7, and 5 is now more
 valuable than its Week-8 slot suggests.
 
 7. **Does choosing `q` from the data leak?** The data-dependent magnitude bound is worth 4.2
@@ -584,16 +639,16 @@ valuable than its Week-8 slot suggests.
 
 ---
 
-## 11. What this changes in the plan
+## 12. What this changes in the plan
 
 - Week 3 is done; Week 4's `quantize.py`, round-trip tests and overflow detection are
   implemented and verified (study D), so W4 reduces to measuring error-vs-`f` on the target
   dataset and folding the codec into the Week 5 gradient path.
 - The Week 8 CRT/RNS item should be **asked about now** (open question 5), because `h_i = 1`
-  makes `m` independent of `n` *and* removes the need for the entropy modelling in §6
+  makes `m` independent of `n` *and* removes the need for the entropy modelling in §7
   entirely. It is no longer an optional efficiency extra; it is the parameter regime the
   scheme wants to live in.
 - The `λ³` correction in PLAN.md has a sibling here: the `h ≈ 1/3` "structural" figure was
   computed with a magnitude constant that omitted the clip range. The honest numbers are in
   §8, and `h` rises with precision rather than staying flat.
-- `A = 4σ` must rise with `f_X` past 12. The table in §6 is the rule.
+- `A = 4σ` must rise with `f_X` past 12. The table in §7 is the rule.

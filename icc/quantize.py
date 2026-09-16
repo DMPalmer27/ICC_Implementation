@@ -474,8 +474,8 @@ def gradient_bound_data_dependent(x_codes, y_codes, w_spec: FixedPointSpec) -> i
     PRIVACY CAVEAT, and it is a real one: q then depends on the data, and q is public. That
     is a leakage channel Theorem 1 does not cover, since the theorem conditions on the
     scheme parameters. Rounding q up to a coarse public grid (say the next power of two)
-    caps the leaked quantity at a few bits, but it does not make it zero. Open question 7 of
-    docs/QUANTIZATION.md. Use gradient_bound_worst_case unless that is resolved.
+    caps the leaked quantity at a few bits, but it does not make it zero. Open question 7 of docs/PLAN.md;
+    see also section 6.1 of docs/QUANTIZATION.md. Use gradient_bound_worst_case unless that is resolved.
 
     :param x_codes: Quantised feature matrix, shape (n_s, P), integer codes
     :param y_codes: Quantised labels, shape (n_s,), integer codes
@@ -564,7 +564,7 @@ def entropy_bounds(n: int, r: int, q: int, spec: FixedPointSpec,
     PROPOSED replacement for real data, and it is not a third estimator to be mixed with
     those two -- it computes bounds, not estimates. It trades an unverifiable independence
     assumption for a single scalar density bound. It still needs Raviv's sign-off before
-    any privacy claim rests on it; see open question 1 of docs/PLAN.md and section 6 of
+    any privacy claim rests on it; see open question 1 of docs/PLAN.md and section 7 of
     docs/QUANTIZATION.md.
 
     :param n: Data length

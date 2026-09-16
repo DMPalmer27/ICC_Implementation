@@ -260,7 +260,7 @@ feasibility model being trustworthy. Right now neither holds.
 > embeddings, field-size derivation, entropy bounds and recommended parameters are in
 > `docs/QUANTIZATION.md`; `icc/quantize.py` implements it; `tools/quantization_study.py`
 > regenerates every number. End-to-end decodability is verified against an exact integer
-> oracle. Three corrections to what this section assumed, all in §8–§11 of that document:
+> oracle. Three corrections to what this section assumed, all in §9–§12 of that document:
 > `h` **rises** with `f_X` rather than being flat (the magnitude constant here omitted the
 > clip range), the `galois` native-arithmetic ceiling `log2 q <= 31.5` forces
 > `2 f_X + f_w <= 18`, and the CRT/RNS item in W8 is worth more than its slot suggests —
@@ -428,7 +428,7 @@ standardization, better conditioned at low feature counts, and no need to fetch 
    but the empirical CDF is a far richer public data-dependent transform than question 4's
    standardisation.
 9. **(New, W3.)** Is the min-entropy/sup-density lower bound on `H_p(X)`
-   (`quantize.entropy_bounds`, `docs/QUANTIZATION.md` §6) the intended way to instantiate
+   (`quantize.entropy_bounds`, `docs/QUANTIZATION.md` §7) the intended way to instantiate
    Theorem 1 for continuous data? It is rigorous, uniform in `p`, survives correlation, and
    measures 0.5 bits loose for a Gaussian. If acceptable, question 1's independence
    assumption can be dropped rather than patched.
