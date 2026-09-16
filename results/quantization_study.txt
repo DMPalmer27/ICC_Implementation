@@ -1,0 +1,124 @@
+seed = 0; every number below is reproducible from this script
+
+==============================================================================
+  A. Entropy lower bound vs exact discretised-Gaussian entropy
+==============================================================================
+  interior-cell term:  f + 1.326 bits
+  saturation term:     -log2 P(|X| clipped on one side), independent of f
+  bound is the MINIMUM of the two, and holds for every order p > 1
+
+  clip = 4 sigma  (saturation term = 14.95 bits, atom mass 3.2e-05)
+    f    levels      H_2      H_3      H_8    bound      binds  slack(H_8)  log2 levels
+    4       129    5.826    5.722    5.540    5.326   interior       0.215        7.011
+    8     2,049    9.826    9.722    9.540    9.326   interior       0.214       11.001
+   12    32,769   13.826   13.722   13.540   13.326   interior       0.214       15.000
+   16   524,289   17.825   17.720   16.928   14.946 saturation       1.981       19.000
+   20 8,388,609   21.815   21.314   16.939   14.946 saturation       1.992       23.000
+
+  clip = 6 sigma  (saturation term = 29.92 bits, atom mass 9.9e-10)
+    f    levels      H_2      H_3      H_8    bound      binds  slack(H_8)  log2 levels
+    4       193    5.826    5.722    5.540    5.326   interior       0.215        7.592
+    8     3,073    9.826    9.722    9.540    9.326   interior       0.214       11.585
+   12    49,153   13.826   13.722   13.540   13.326   interior       0.214       15.585
+   16   786,433   17.826   17.722   17.540   17.326   interior       0.214       19.585
+   20 12,582,913   21.826   21.722   21.540   21.326   interior       0.214       23.585
+
+  Where the interior term binds, slack is 0.500 bits at H_2 regardless of f:
+  the exact Gaussian value is f + log2(2*sqrt(pi)) = f + 1.825 against a bound
+  of f + log2(sqrt(2*pi)). That is tight enough to use in place of an entropy
+  estimate -- which the case study cannot produce anyway, since 25 samples
+  cannot resolve a 2^18-ary distribution.
+
+  The saturation term is the trap. At clip = 4 sigma, f = 16 the exact
+  H_8 = 16.93 falls BELOW the interior term f + 1.325 = 17.33, because the
+  clipped tail atom has overtaken a typical interior cell. Ignoring the
+  saturation term there would have over-estimated H_p(X) and under-estimated m,
+  i.e. failed in the unsafe direction. Rule: keep P_sat <= 2^-f * M.
+
+    f   min clip (sigma) keeping the interior term binding
+    8                                                 2.96
+   12                                                 3.73
+   16                                                 4.37
+   20                                                 4.95
+   24                                                 5.46
+  Widening the clip is cheap: it enters the magnitude bound polynomially while
+  the tail mass decays like a Gaussian. At n_s=25, P=3, f_X=8, f_w=0, going from
+  4 to 5 sigma costs 0.94 bits of q and buys 6.79 bits of entropy headroom.
+  So widen the clip, do not weaken the bound.
+
+==============================================================================
+  B. Field-size budget, n = 100 (25 samples x 3 features + 25 labels)
+==============================================================================
+  diabetes subsample, standardised: max|X| = 1.97 sigma, max|y| = 2.55 sigma, clip = 4 sigma
+  r = 5, p = 2, eps = 1e-06, d = 2, native ceiling log2 q <= 31.5
+
+          |     worst-case bound (public)      |    data-dependent bound (leaky)    |
+ f_X  f_w |  log2q      h    m   lambda nat |  log2q      h    m   lambda nat | bits saved
+----------------------------------------------------------------------------------------------------
+   6    0 |   25.3  0.289   76    3,003   y |   21.2  0.346   71    2,628   y |   4.2
+   6    4 |   29.3  0.250   80    3,321   y |   25.2  0.291   76    3,003   y |   4.2
+   6    8 |   33.3  0.220   82    3,486   n |   29.2  0.251   80    3,321   y |   4.2
+
+   8    0 |   29.3  0.318   73    2,775   y |   25.2  0.370   68    2,415   y |   4.2
+   8    4 |   33.3  0.280   77    3,081   n |   29.2  0.319   73    2,775   y |   4.2
+   8    8 |   37.3  0.250   80    3,321   n |   33.2  0.281   77    3,081   n |   4.2
+
+  10    0 |   33.3  0.340   71    2,628   n |   29.2  0.388   67    2,346   y |   4.2
+  10    4 |   37.3  0.303   74    2,850   n |   33.2  0.341   71    2,628   n |   4.2
+  10    8 |   41.3  0.274   77    3,081   n |   37.2  0.305   74    2,850   n |   4.2
+
+  12    0 |   37.3  0.357   69    2,485   n |   33.2  0.401   65    2,211   n |   4.2
+  12    4 |   41.3  0.322   73    2,775   n |   37.2  0.358   69    2,485   n |   4.2
+  12    8 |   45.3  0.294   75    2,926   n |   41.2  0.324   72    2,701   n |   4.2
+
+  Reading it: f_w is the dominant knob because it enters log2 q once while f_X
+  enters twice but also raises the numerator of h. The native ceiling binds:
+  2 f_X + f_w <= ~18 under the worst-case bound at this n_s and clip.
+
+  Choosing q: the leakage accounting (f_X = 8, f_w = 0)
+    q = 681574423 (log2 q = 29.34, native), policy 'public-format', leaks <= 0.00 bits
+    q = 67108879 (log2 q = 26.00, native), policy 'coarsened', leaks <= 5.36 bits
+    bits of q saved by coarsening       : 3.34
+    scheme's own budget, eps_c=0.0014   : 0.041 bits per r-subset
+    side channel opened to save them    : 5.36 bits (132x the budget)
+  So use the public-format bound. The data-dependent one is an instrument for
+  quantifying what is given up, not a configuration to ship.
+
+==============================================================================
+  C. Residue entropy h_i for the CRT / RNS variant (exact, clip 4 sigma)
+==============================================================================
+ f_X  H_2 bits | h_i(q=     1,031) h_i(q=     8,209) h_i(q=    65,537) h_i(q=1,073,741,827)
+----------------------------------------------------------------------------------------
+   6     7.826 |            0.7818            0.6018            0.4891            0.2609
+   8     9.826 |            0.9767            0.7557            0.6141            0.3275
+  10    11.826 |            1.0000            0.9095            0.7391            0.3942
+  12    13.826 |            1.0000            1.0000            0.8641            0.4609
+  16    17.825 |            1.0000            1.0000            1.0000            0.5942
+
+  h_i = min(H_2(symbol), log2 q_i) / log2 q_i to within numerical display:
+  entropy in bits is capped by the source, so shrinking the field raises the
+  ratio. Design rule: pick each CRT prime with log2 q_i <= H_p(symbol) in bits
+  and h_i = 1, giving m_i >= r + p + log_{q_i}(1/eps), independent of n.
+  Both Theorem 1 entropy terms then become tight and assumption-free
+  (H_p(X) = n, max_R = r), which also sidesteps the correlated-features problem.
+  Correctness is immediate (reduction mod q_i is a ring homomorphism); the
+  privacy composition across the L instances is NOT -- docs/PLAN.md question 5.
+
+==============================================================================
+  D. End-to-end: quantise -> store -> query gradient -> decode -> lift
+==============================================================================
+  n = 12, f_X = 8, f_w = 4, clip = 4
+  worst-case |g| bound B = 603,979,776  ->  q = 1,207,959,559 (log2 q = 30.2)
+  h = 0.309, m = 12, lambda = 91, eps_c = 0.012650
+
+  j     decoded (lifted)       integer oracle  exact   decoded/2^s    float grad  err vs float  err vs dequant
+  0             -887,912             -887,912   True     -0.846779     -0.817126      2.97e-02        0.00e+00
+  1               45,420               45,420   True      0.043316      0.067242      2.39e-02        0.00e+00
+
+  field computation reproduces the integer computation: True
+  worst-case bound B = 603,979,776 vs actual max |g| = 887,912 -> 680x loose (9.4 bits of q)
+  'err vs dequant' is the error the SCHEME contributes: zero to float64
+  rounding. 'err vs float' is input quantisation only, and at f_w = 4 it is
+  dominated by the weight precision, not by f_X = 8.
+
+wrote 24 budget rows to results/quantization_budget.csv

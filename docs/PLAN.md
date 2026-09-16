@@ -256,6 +256,17 @@ feasibility model being trustworthy. Right now neither holds.
 
 ### Weeks 3–4 · Quantization (moved up; this is now the critical path)
 
+> **Status (2026-09-15): W3 done, W4 mostly done.** Design, survey of alternative
+> embeddings, field-size derivation, entropy bounds and recommended parameters are in
+> `docs/QUANTIZATION.md`; `icc/quantize.py` implements it; `tools/quantization_study.py`
+> regenerates every number. End-to-end decodability is verified against an exact integer
+> oracle. Three corrections to what this section assumed, all in §8–§11 of that document:
+> `h` **rises** with `f_X` rather than being flat (the magnitude constant here omitted the
+> clip range), the `galois` native-arithmetic ceiling `log2 q <= 31.5` forces
+> `2 f_X + f_w <= 18`, and the CRT/RNS item in W8 is worth more than its slot suggests —
+> it makes `m` independent of `n` *and* removes the entropy-modelling assumption. New open
+> questions 7–9 below.
+
 - **W3 — design**
   - [ ] Fixed-point map `x_real → round(x·2^f) mod q`, signed values in the upper half
         of the field (`[−(q−1)/2, (q−1)/2]`).
@@ -408,6 +419,19 @@ standardization, better conditioned at low feature counts, and no need to fetch 
 6. For repeated GD queries against one key: does the Theorem 1 bound compose over `T`
    observations, or is a fresh key needed per round? (Next semester's core question, but the
    answer shapes this semester's protocol design.)
+7. **(New, W3.)** Does choosing `q` from the data leak? The data-dependent no-wraparound
+   bound is worth 4.2 bits of `q` (≈5 key symbols, ≈400 workers at `n = 100`) but makes the
+   public field size a function of the private data, which Theorem 1 does not model.
+   Coarsen `q` to a public grid and charge the leaked bits, or condition the theorem on `q`?
+8. **(New, W3.)** Is a quantile/rank pre-transform acceptable? It makes the per-symbol
+   entropy exactly `f` bits by construction, removes clipping, and needs no source model —
+   but the empirical CDF is a far richer public data-dependent transform than question 4's
+   standardisation.
+9. **(New, W3.)** Is the min-entropy/sup-density lower bound on `H_p(X)`
+   (`quantize.entropy_bounds`, `docs/QUANTIZATION.md` §6) the intended way to instantiate
+   Theorem 1 for continuous data? It is rigorous, uniform in `p`, survives correlation, and
+   measures 0.5 bits loose for a Gaussian. If acceptable, question 1's independence
+   assumption can be dropped rather than patched.
 
 ---
 

@@ -41,16 +41,20 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | `icc/server.py` | `Server` = the admin: shards `x̃` to workers, aggregates results |
 | `icc/worker.py` | `Worker` — deliberately trivial, just `f(its share)` |
 | `icc/utils.py` | `G` generation, entropy, Theorem 1 `m` bound, leakage bound, `build_monomial_matrix`, information (super)set enumeration |
+| `icc/quantize.py` | Fixed-point map reals ↔ `F_q`, balanced lift, hard no-wraparound bounds, field-size choice, rigorous entropy bounds for quantised data |
 | `main.py` | One end-to-end demo run with printed diagnostics |
 | `tests/test_icc.py` | 6-section validation suite mapped to paper claims; its printed tables are report output |
 | `tests/test_regression.py` | Fast equivalence/invariant checks; keeps pre-optimization implementations as oracles |
 | `tests/conftest.py` | `sys.path` shim; imported explicitly by both suites |
 | `tools/feasibility.py` | Parameter feasibility instrument — reports `m`, `λ`, and **measured** build/solve cost |
+| `tools/quantization_study.py` | Seeded measurements behind `docs/QUANTIZATION.md`: entropy-bound validation, field-size budget, residue entropy, end-to-end decodability |
 | `results/full_test_pre_entropy_fix.txt` | Full `test_icc.py` run before the Week 1 entropy fix (baseline) |
 | `results/full_test_post_fix.txt` | Full `test_icc.py` run after it |
 | `results/feasibility_sweep.csv` | Raw rows from `tools/feasibility.py` |
+| `results/quantization_study.txt` / `quantization_budget.csv` | Saved output of `tools/quantization_study.py` |
 | `docs/PLAN.md` | Fall 2026 semester plan |
 | `docs/WEEK1_FINDINGS.md` | What the Week 1 optimization pass changed and why |
+| `docs/QUANTIZATION.md` | Week 3 design doc: survey of real→`F_q` embeddings, field-size derivation, the entropy bounds, recommended parameters |
 | `Written_Resources/` | The paper + the Spring 2026 report (PDFs, plus `extracted/` plain text) |
 
 ## Notation: paper ↔ code
@@ -73,6 +77,7 @@ Use the project venv (Python 3.11, `galois` + `numpy`). Run from the repo root:
 .venv/bin/python tests/test_icc.py                 # full suite, ~9 s
 .venv/bin/python tests/test_icc.py --fast          # ~2.5 s
 .venv/bin/python tools/feasibility.py --csv results/feasibility_sweep.csv
+.venv/bin/python tools/quantization_study.py --csv results/quantization_budget.csv
 ```
 
 The full suite took ~81 min before the Week 1 pass and now takes ~9 s, so it is cheap to
@@ -103,7 +108,13 @@ These are thesis-math decisions. Raise them; let Daniel decide.
    unsigned. Theorem 1 needs a *lower* bound on `H_p(X)` and an *upper* bound on
    `max_R H_p(X_R)`; either one backwards under-estimates `m` and breaks privacy.
    Needs a ruling from Raviv before real (correlated) data. See `docs/WEEK1_FINDINGS.md` §4.
-3. **Two entropy estimators still coexist, now documented rather than mixed.**
+3. **`quantize.entropy_bounds` is a proposed third route, and it computes BOUNDS not
+   estimates.** It lower-bounds `H_p(X)` by min-entropy under a sup-density assumption and
+   upper-bounds `max_R H_p(X_R)` by `r·log_q(levels)` — the directions Theorem 1 needs. The
+   upper bound is assumption-free; the lower bound survives correlation and is a candidate
+   fix for issue 2. Do not mix it with the two estimators below. Needs Raviv's ruling —
+   see `docs/QUANTIZATION.md` §6 and open questions 7–9 there.
+4. **Two entropy estimators still coexist, now documented rather than mixed.**
    `compute_max_subset_p_entropy` uses the source-model closed form;
    `_compute_max_subset_p_entropy_empirical` is the old `C(n,r)` brute force, kept for
    reference and explicitly **not** an oracle for the former. Don't use it to compute `m`.

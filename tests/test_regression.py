@@ -10,6 +10,9 @@ Description: Fast regression checks for the Week 1 optimisation pass. Unlike tes
       3. the Theorem 1 entropy quantities are mutually consistent
       4. compute_required_m rejects impossible inputs instead of returning a bad m
       5. the vectorised Server.store_data produces the same shares as the old loop
+      6-9. quantisation: fixed-point round trips, the balanced-lift sign convention, the
+           two no-wraparound bounds, the direction of the entropy bounds, and a quantised
+           gradient decoding exactly through the real scheme
 
 Usage:
     .venv/bin/python tests/test_regression.py
@@ -17,6 +20,7 @@ Usage:
 
 import conftest  # noqa: F401  -- puts icc/ on sys.path; must precede the local imports
 
+import math
 import time
 import galois
 import numpy as np
@@ -24,6 +28,24 @@ import numpy as np
 from config import SystemContext
 from client import Client
 from server import Server
+from quantize import (
+    POWER_OF_TWO_GRID,
+    FixedPointSpec,
+    assert_representable,
+    choose_field_size,
+    choose_prime,
+    codes_to_field,
+    entropy_bounds,
+    from_field,
+    from_integer,
+    gradient_bound_data_dependent,
+    gradient_bound_worst_case,
+    leakage_budget_bits,
+    lift_balanced,
+    symbol_entropy_lower_bits,
+    to_field,
+    to_integer,
+)
 from utils import (
     build_monomial_matrix,
     compute_max_subset_p_entropy,
@@ -219,17 +241,18 @@ def test_entropy_consistency():
 # 4. compute_required_m rejects impossible inputs
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _raises(fn) -> bool:
+def _raises(fn, exc: type[Exception] = ValueError) -> bool:
     """
-    Reports whether calling fn raises ValueError.
+    Reports whether calling fn raises the expected exception type.
 
     :param fn: Zero-argument callable
-    :return: True if ValueError was raised
+    :param exc: Exception type to expect; the quantisation checks expect OverflowError
+    :return: True if exc was raised
     """
     try:
         fn()
         return False
-    except ValueError:
+    except exc:
         return True
 
 
@@ -273,9 +296,197 @@ def test_server_shares_match_legacy():
     check(f"all {len(legacy)} worker shares identical", same)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Quantisation: round trips, the sign convention, and the two hard bounds
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_quantization_round_trip():
+    print("\n6. Fixed-point round trips and the balanced-lift sign convention")
+    spec = FixedPointSpec(f=10, clip=4.0)
+    rng = np.random.default_rng(11)
+    v = rng.normal(size=5000)
+
+    codes = to_integer(v, spec)
+    back = from_integer(codes, spec)
+    in_range = np.abs(v) <= spec.clip
+    check("nearest rounding stays within half a step",
+          bool(np.all(np.abs(back[in_range] - v[in_range]) <= spec.step / 2 + 1e-12)))
+    check("clipping is enforced in both directions",
+          int(np.abs(codes).max()) <= spec.max_int)
+
+    q = int(galois.next_prime(2 ** 20))
+    GF = galois.GF(q)
+    z = to_field(GF, v, spec)
+    check("to_field then lift_balanced recovers the integer codes exactly",
+          bool(np.array_equal(np.asarray(lift_balanced(z, q)), codes)))
+    check("from_field inverts a single-factor embedding",
+          bool(np.allclose(from_field(z, q, spec.f), back)))
+
+    # Signs are the part that silently breaks; check the window edges explicitly
+    edges = np.array([-(q - 1) // 2, -1, 0, 1, (q - 1) // 2])
+    check("balanced lift is the identity on the whole window",
+          bool(np.array_equal(np.asarray(lift_balanced(GF(edges % q), q)), edges)))
+
+    check("assert_representable accepts a value inside the window",
+          not _raises(lambda: assert_representable((q - 1) // 2, q), OverflowError))
+    check("assert_representable rejects a value one past the window",
+          _raises(lambda: assert_representable((q - 1) // 2 + 1, q), OverflowError))
+    check("to_field rejects an alphabet that cannot fit in F_q",
+          _raises(lambda: to_field(galois.GF(31), v, spec), OverflowError))
+
+    # Extension fields label their elements with integers too and some operations look
+    # right by coincidence, so an unguarded run returns confident nonsense rather than
+    # failing. GF(2^5): the image of Z is {0, 1} and 3 + 5 = 6.
+    check("the embedding rejects extension fields",
+          _raises(lambda: codes_to_field(galois.GF(2 ** 5), codes[:4])))
+    check("the embedding accepts prime fields",
+          not _raises(lambda: codes_to_field(GF, codes[:4])))
+    check("integer addition survives the prime-field embedding but not GF(2^5)",
+          int(GF(3) + GF(5)) == 8 and int(galois.GF(2 ** 5)(3) + galois.GF(2 ** 5)(5)) != 8)
+
+
+def test_gradient_bounds_are_valid():
+    print("\n7. The no-wraparound bounds actually bound the gradient")
+    n_samples, n_features, trials = 6, 3, 40
+    x_spec = FixedPointSpec(f=8, clip=4.0)
+    w_spec = FixedPointSpec(f=4, clip=4.0)
+    B_wc = gradient_bound_worst_case(n_samples, n_features, x_spec, w_spec)
+
+    rng = np.random.default_rng(3)
+    wc_ok = dd_ok = order_ok = True
+    for _ in range(trials):
+        # Heavy tails on purpose, so clipping is exercised rather than avoided
+        X = rng.standard_t(2, size=(n_samples, n_features))
+        y = rng.standard_t(2, size=n_samples)
+        w = rng.standard_t(2, size=n_features)
+        Xq, yq, wq = to_integer(X, x_spec), to_integer(y, x_spec), to_integer(w, w_spec)
+        B_dd = gradient_bound_data_dependent(Xq, yq, w_spec)
+
+        for j in range(n_features):
+            g = int(sum((sum(int(Xq[i, k]) * int(wq[k]) for k in range(n_features))
+                         - 2 ** w_spec.f * int(yq[i])) * int(Xq[i, j])
+                        for i in range(n_samples)))
+            wc_ok &= abs(g) <= B_wc
+            dd_ok &= abs(g) <= B_dd
+        order_ok &= B_dd <= B_wc
+
+    check(f"worst-case bound holds over {trials} heavy-tailed trials", wc_ok)
+    check(f"data-dependent bound holds over {trials} heavy-tailed trials", dd_ok)
+    check("data-dependent bound is never looser than the worst case", order_ok)
+
+    q = choose_prime(B_wc, warn_native=False)
+    check("choose_prime returns a prime with q >= 2B + 1",
+          q >= 2 * B_wc + 1 and galois.is_prime(q))
+
+    # The field-size policy, including the leakage accounting that makes it a decision
+    public = choose_field_size(B_wc, warn_native=False)
+    check("public-format policy leaks nothing and cannot wrap",
+          public.leakage_bits == 0.0 and public.q >= 2 * B_wc + 1,
+          f"{public}")
+    check("a data-derived bound cannot be published without a grid",
+          _raises(lambda: choose_field_size(B_wc, data_dependent=True)))
+
+    coarse = choose_field_size(B_wc, data_dependent=True, grid=POWER_OF_TWO_GRID,
+                               warn_native=False)
+    check("coarsened policy bounds its leakage by log2 of the grid size",
+          math.isclose(coarse.leakage_bits, math.log2(len(POWER_OF_TWO_GRID)))
+          and coarse.q >= 2 * B_wc + 1)
+    check("coarsening rounds the bound up, never down",
+          coarse.magnitude_bound >= B_wc)
+    check("a bound past the end of the grid is refused",
+          _raises(lambda: choose_field_size(2 ** 60, data_dependent=True,
+                                            grid=POWER_OF_TWO_GRID)))
+    # The comparison that decides the policy: the side channel dwarfs the scheme's budget
+    check("the coarsened side channel exceeds the scheme's own leakage budget",
+          coarse.leakage_bits > 50 * leakage_budget_bits(0.0016, public.q),
+          f"{coarse.leakage_bits:.2f} vs {leakage_budget_bits(0.0016, public.q):.4f} bits")
+
+
+def test_entropy_bounds_directions():
+    print("\n8. Quantisation entropy bounds point the way Theorem 1 needs")
+    spec = FixedPointSpec(f=8, clip=4.0)
+    q = int(galois.next_prime(2 ** 30))
+    n, r = 40, 5
+
+    H_lower, max_upper = entropy_bounds(n, r, q, spec)
+    check("H_p(X) lower bound and max_R upper bound are mutually consistent",
+          max_upper <= H_lower <= n, f"{max_upper:.3f} <= {H_lower:.3f} <= {n}")
+
+    ctx = SystemContext(q=q, n=n, d=2, r=r, p=2, epsilon=1e-6)
+    ctx.H_p_X, ctx.max_H_p_X_R = H_lower, max_upper
+    check("the bounds pass compute_required_m's guards",
+          not _raises(lambda: compute_required_m(ctx)))
+
+    # The saturation term must be able to win, or the f=16/clip=4 failure recurs
+    wide = symbol_entropy_lower_bits(FixedPointSpec(f=16, clip=4.0), saturation_mass=3.2e-5)
+    interior = symbol_entropy_lower_bits(FixedPointSpec(f=16, clip=4.0))
+    check("a dominant saturation atom lowers the bound (not ignored)",
+          wide < interior, f"{wide:.3f} vs {interior:.3f}")
+    check("a negligible saturation atom leaves the interior term binding",
+          math.isclose(symbol_entropy_lower_bits(spec, saturation_mass=1e-30),
+                       symbol_entropy_lower_bits(spec)))
+
+    # More precision must never lower the entropy bound
+    monotone = all(symbol_entropy_lower_bits(FixedPointSpec(f=f, clip=6.0))
+                   < symbol_entropy_lower_bits(FixedPointSpec(f=f + 1, clip=6.0))
+                   for f in range(2, 20))
+    check("the bound is increasing in f while the interior term binds", monotone)
+
+
+def test_quantized_gradient_decodes_exactly():
+    print("\n9. A quantised gradient survives the scheme exactly")
+    n_samples, n_features, f_X, f_w = 4, 2, 6, 2
+    x_spec = FixedPointSpec(f=f_X, clip=4.0)
+    w_spec = FixedPointSpec(f=f_w, clip=4.0)
+    n = n_samples * (n_features + 1)
+
+    rng = np.random.default_rng(5)
+    X, y, w = (rng.normal(size=(n_samples, n_features)), rng.normal(size=n_samples),
+               rng.normal(size=n_features))
+    Xq, yq, wq = to_integer(X, x_spec), to_integer(y, x_spec), to_integer(w, w_spec)
+
+    q = choose_prime(gradient_bound_worst_case(n_samples, n_features, x_spec, w_spec),
+                     warn_native=False)
+    GF = galois.GF(q)
+    ctx = SystemContext(q=q, n=n, d=2, r=3, p=2, epsilon=1e-3)
+    ctx.H_p_X, ctx.max_H_p_X_R = entropy_bounds(n, ctx.r, q, x_spec)
+    ctx.m = compute_required_m(ctx)
+
+    client, server = Client(ctx, GF), Server(ctx, GF)
+    G = generate_random_G(GF, ctx.m, n)
+    x_field = codes_to_field(GF, np.concatenate([Xq.ravel(), yq]), x_spec)
+    server.store_data(client.encode_data(x_field, G), G)
+
+    iX = lambda i, k: i * n_features + k
+    iy = lambda i: n_samples * n_features + i
+    w_gf = [GF(int(v) % q) for v in wq]
+    two_fw = GF(2 ** f_w % q)
+
+    exact = True
+    for j in range(n_features):
+        def f(z, j=j):
+            acc = GF(0)
+            for i in range(n_samples):
+                residual = GF(0)
+                for k in range(n_features):
+                    residual = residual + z[iX(i, k)] * w_gf[k]
+                acc = acc + (residual - two_fw * z[iy(i)]) * z[iX(i, j)]
+            return acc
+
+        points, results = server.compute_request(f)
+        decoded = int(lift_balanced(client.decode_result(points, results), q))
+        oracle = int(sum((sum(int(Xq[i, k]) * int(wq[k]) for k in range(n_features))
+                          - 2 ** f_w * int(yq[i])) * int(Xq[i, j])
+                         for i in range(n_samples)))
+        exact &= decoded == oracle
+
+    check(f"all {n_features} gradient components decode to the integer oracle "
+          f"(m={ctx.m}, lambda={math.comb(ctx.m + 2, 2)})", exact)
+
+
 def main():
     print("=" * 72)
-    print("  ICC REGRESSION CHECKS  (Week 1 optimisation pass)")
+    print("  ICC REGRESSION CHECKS  (Week 1 optimisation pass, Week 3 quantisation)")
     print("=" * 72)
     t0 = time.perf_counter()
 
@@ -284,6 +495,10 @@ def main():
     test_entropy_consistency()
     test_required_m_guards()
     test_server_shares_match_legacy()
+    test_quantization_round_trip()
+    test_gradient_bounds_are_valid()
+    test_entropy_bounds_directions()
+    test_quantized_gradient_decodes_exactly()
 
     elapsed = time.perf_counter() - t0
     print("\n" + "=" * 72)
