@@ -23,6 +23,9 @@ Description: Reproducible measurements behind the quantisation design in
          the quantity the CRT / residue-number-system variant of docs/PLAN.md Week 8 turns
          on. Exact, from cell probabilities.
 
+      E. Weight precision. Gradient-descent convergence against f_w, which is what
+         actually sets f_w -- the h-optimal choice f_w = 0 is a dead zone.
+
       D. End-to-end decodability. A real ICC run: quantise, store, query the least-squares
          gradient as a degree-2 polynomial, decode, lift, compare against an exact integer
          oracle and against the plaintext float gradient. This is the check that the whole
@@ -485,6 +488,75 @@ def study_end_to_end(n_samples: int = 4, n_features: int = 2, f_X: int = 8, f_w:
     return all_exact
 
 
+def study_weight_precision(n_samples: int = 25, n_features: int = 3, f_X: int = 7,
+                           clip_w: float = 2.0, steps: int = 400, eta: float = 0.05):
+    """
+    Convergence of gradient descent against the weight precision f_w.
+
+    This is the study that sets f_w, and it overrides the h-optimal choice. Picking f_w on
+    key size alone points at f_w = 0, which is the smallest field and the highest entropy
+    ratio -- and is useless, because with standardised features the OLS optimum has
+    components below 0.5 and a unit weight step annihilates them. Requirement R5 has to be
+    checked, not assumed.
+
+    The field arithmetic is exact (study D), so this runs the integer gradient directly and
+    skips the scheme: what is being measured is the quantisation, not the protocol.
+
+    :param n_samples: Samples
+    :param n_features: Features
+    :param f_X: Fractional bits of the stored data
+    :param clip_w: Declared weight clip A_w
+    :param steps: Gradient-descent steps
+    :param eta: Learning rate
+    """
+    section("E. Gradient descent vs weight precision f_w (the constraint that sets f_w)")
+    X, y = case_study_data(n_samples, n_features)
+    x_spec = FixedPointSpec(f=f_X, clip=CLIP)
+    Xq, yq = to_integer(X, x_spec), to_integer(y, x_spec)
+    w_star = np.linalg.lstsq(X, y, rcond=None)[0]
+    loss = lambda w: 0.5 * float(np.sum((X @ w - y) ** 2)) / n_samples
+
+    print(f"  f_X = {f_X}, A_w = {clip_w:.0f}, {steps} steps, eta = {eta}")
+    print(f"  exact OLS optimum w* = {np.round(w_star, 4)}, loss = {loss(w_star):.6f}")
+    print(f"  max |w*| = {np.abs(w_star).max():.4f}, cond(X^T X) = "
+          f"{np.linalg.cond(X.T @ X):.1f}")
+    print(f"\n{'f_w':>4} {'step':>8} {'quantised w*':>26} {'final loss':>11} "
+          f"{'excess vs OLS':>14} {'peak |w_t|':>11}")
+
+    excess = {}
+    for f_w in (0, 2, 4, 6, 8):
+        w_spec = FixedPointSpec(f=f_w, clip=clip_w)
+        budget = QueryBudget(n_samples, n_features, 2, x_spec, w_spec)
+        w, peak, scale = np.zeros(n_features), 0.0, 2.0 ** (2 * f_X + f_w)
+        for _ in range(steps):
+            wq = to_integer(w, w_spec)
+            budget.assert_admissible(wq, f_w)
+            g = np.array([sum((sum(int(Xq[i, k]) * int(wq[k]) for k in range(n_features))
+                               - 2 ** f_w * int(yq[i])) * int(Xq[i, j])
+                              for i in range(n_samples))
+                          for j in range(n_features)], dtype=float) / scale
+            w = w - eta * g / n_samples
+            peak = max(peak, float(np.abs(w).max()))
+        excess[f_w] = (loss(w) - loss(w_star)) / loss(w_star)
+        qstar = np.round(w_star * 2 ** f_w) / 2 ** f_w
+        print(f"{f_w:>4} {2.0 ** -f_w:>8.4f} {str(np.round(qstar, 4)):>26} "
+              f"{loss(w):>11.6f} {loss(w) - loss(w_star):>14.2e} {peak:>11.3f}")
+
+    print(f"\n  f_w = 0 lands {excess[0] * 100:.0f}% above the OLS loss: not a precision "
+          f"tradeoff but a")
+    print("  dead zone. Two of the three optimal weights quantise to exactly zero, so the")
+    print("  Xw term of the gradient is mostly absent and descent limit-cycles.")
+    print(f"  f_w = 4 costs {excess[4]:.1e} relative excess loss and f_w = 6 reaches "
+          f"{excess[6]:.1e}, so f_w = 4")
+    print("  is the operating point. Cost of insisting on it: 306 extra workers versus the")
+    print("  h-optimal f_w = 0 (lambda 3,081 vs 2,775) -- the honest price of a usable model.")
+    print(f"\n  peak |w_t| = {peak:.2f} against the declared A_w = {clip_w:.0f}: every query")
+    print("  was admitted by the budget, with headroom. A_w is a PRE-COMMITMENT, not a")
+    print("  measurement -- justified a priori by |w*| <= 1/lambda_min(correlation matrix),")
+    print("  so A_w = 2 covers any design with lambda_min >= 1/2. Do not read A_w off the")
+    print("  data: that is the same leak as reading B off the data (section 7.1).")
+
+
 def main():
     parser = argparse.ArgumentParser(description="ICC quantisation design study")
     parser.add_argument("--csv", help="write the field-size budget rows to this path")
@@ -495,6 +567,7 @@ def main():
     rows = study_field_budget()
     study_residue_entropy()
     ok = study_end_to_end()
+    study_weight_precision()
 
     if args.csv:
         with open(args.csv, "w", newline="") as fh:

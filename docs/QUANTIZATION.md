@@ -387,10 +387,48 @@ the budget only has to be an upper bound — it does not have to be tight.
 cheap and uses only public quantities, so the client runs it *before sending* — which is the
 only time it can, since after upload it cannot detect a violation (§3's R3).
 
-**Enforcement, in practice.** The weight clip `A_w` is the mechanism: clipping `w` to the
-declared bound at every step makes admissibility automatic. If the true optimum lies outside
-`A_w`, training converges to the clipped solution — a utility cost, not a correctness
-failure. With standardised features `w = O(1)`, so `A_w = 4` is generous.
+### 6.1 Where `w_spec` comes from, given that `w` does not exist yet
+
+`w_spec` is the model weight vector's format, `w` starts at zero, and it is built up by the
+very queries `q` has to be sized for. So it cannot be *measured* at upload. It is not
+measured — **it is declared.** `w_spec` is a box the client promises to stay inside, and
+clipping is what keeps the promise. Nothing about the eventual weights needs to be known;
+what is needed is a commitment about what will be *allowed*.
+
+That shifts the question to whether the box is big enough, which has an a priori answer.
+For standardised `X` and `y` the OLS optimum is `w* = R⁻¹ρ` with `R` the feature correlation
+matrix and `ρ` the correlation vector, so `‖w*‖ ≤ ‖R⁻¹‖·‖ρ‖ ≤ 1/λ_min(R)`. Declaring
+`A_w = 2` is therefore exactly the public assumption *"the design has
+`λ_min(R) ≥ 1/2`"* — a statement about admissible multicollinearity, not about this
+dataset. Measured on the subsample: `max|w*| = 0.60`, `cond(XᵀX) = 4.0`, peak `|w_t| = 0.60`
+along the whole trajectory, every query admitted with headroom.
+
+**Do not read `A_w` off the data.** Setting it from the observed `|w*|` is the same leak as
+setting `B` from the data (§7.1), just quieter.
+
+**`f_w` is set by convergence, not by key size** (study E), and this reverses the
+recommendation an earlier draft of this document made. Optimising `f_w` on `h` alone points
+at `f_w = 0`: smallest field, highest entropy ratio. It is also useless. With standardised
+features the optimum is `w* = [0.19, −0.10, 0.60]`, and a unit weight step quantises two of
+those three to exactly zero, so the `Xw` term of the gradient is mostly absent and descent
+limit-cycles:
+
+| `f_w` | step | quantised `w*` | excess loss vs OLS |
+|---:|---:|---|---:|
+| 0 | 1.0 | `[0, 0, 1]` | **+52%** |
+| 2 | 0.25 | `[0.25, 0, 0.5]` | 1.8e-3 |
+| 4 | 0.0625 | `[0.19, −0.13, 0.63]` | 2.8e-4 (9.0e-4 relative) |
+| 6 | 0.0156 | `[0.19, −0.09, 0.61]` | 4.5e-6 |
+| 8 | 0.0039 | `[0.20, −0.10, 0.60]` | 1.1e-6 |
+
+`f_w = 0` is not a precision tradeoff, it is a dead zone — requirement R5 fails outright.
+`f_w = 4` is the operating point. **The price of insisting on it is 306 extra workers**
+(`λ = 3,081` against 2,775), which is the honest cost of a usable model and belongs in the
+paper as such.
+
+**Enforcement, in practice.** Clipping `w` to `A_w` at every step makes admissibility
+automatic. If the true optimum lies outside `A_w`, training converges to the clipped
+solution — a utility cost, not a correctness failure.
 
 **The degree is the harsh entry, and it is structural rather than numeric.** The shares only
 support evaluation of polynomials in `RM_q(d, m)`. A degree-3 query against `d = 2` shares
@@ -399,7 +437,8 @@ up front is possible but expensive: it raises `λ = C(m+d, d)`, and by §11 it l
 entropy ceiling to `h < 1/3`. Committing to `d = 2` is committing to quadratic queries for
 the life of the upload.
 
-**What repeated queries do not do.** Each query is decoded independently, so magnitudes do
+### 6.2 What repeated queries do not do
+ Each query is decoded independently, so magnitudes do
 not accumulate across the `T` gradient steps — every query needs `|ĝⱼ| ≤ (q−1)/2`
 individually, and `T` does not enter `B`. (What *does* accumulate across steps is leakage,
 which is next semester's question, not this one.)
@@ -415,8 +454,40 @@ Hence `q ≥ 2B + 1` for a bound `B` on `|g_j|`, and by R3 that bound must be *h
 **Worst case, from the public format only** (`gradient_bound_worst_case`):
 
 ```
-|g_j| ≤ n_s · ( P · X̂max² · Ŵmax  +  2^{f_w} · X̂max · Ŷmax ),    X̂max = ⌊A·2^f_X⌋
+|g_j| ≤ B ≜ n_s · ( P · X̂max² · Ŵmax  +  2^{f_w} · X̂max · Ŷmax )
+
+        X̂max = Ŷmax = ⌊A_X·2^{f_X}⌋      Ŵmax = ⌊A_w·2^{f_w}⌋
 ```
+
+Since `f_y = f_X` forces `Ŷmax = X̂max`, this collapses to
+`B = n_s·X̂max²·2^{f_w}·(P·A_w + 1)`, and taking logs gives the whole field size in closed
+form:
+
+```
+log2 q  =  1  +  log2 n_s  +  2(f_X + log2 A_X)  +  f_w  +  log2(P·A_w + 1)
+```
+
+At the recommended parameters (`n_s = 25, P = 3, f_X = 7, A_X = 4, f_w = 4, A_w = 2`):
+
+| term | value | what it pays for |
+|---|---:|---|
+| `1` | 1.00 | the factor 2 in `q ≥ 2B+1` — the sign bit |
+| `log2 n_s` | 4.64 | summing over samples |
+| `2(f_X + log2 A_X)` | 18.00 | **two data factors**, precision and range each |
+| `f_w` | 4.00 | weight precision |
+| `log2(P·A_w + 1)` | 2.81 | summing over features, and weight range |
+| **total** | **30.45** | `B = 734,003,200`, `q = 1,468,006,403` |
+
+Verified against the code: closed form 30.45, measured 30.45.
+
+**Notice what is absent: any value from `X`.** Every term is a *shape* or *format*
+parameter — how many samples, how many features, how many bits, how wide the clip. You do
+not need the data to size the field, you need only the declaration of what the data will
+look like. That is the whole reason this policy leaks nothing, and it is why the bound can
+be computed before a single value is read.
+
+The `2(f_X + …)` term is also where §11's ceiling comes from: two data factors in the field,
+one factor's worth of entropy per stored symbol.
 
 Clipping is what makes this exist: without it there is no a priori bound on `|X|`. Leaks
 nothing, because `A`, `f_X`, `f_w`, `n_s`, `P` are all public.
@@ -621,10 +692,24 @@ was evaluated at were not. Raise `f_X` as far as the `2f_X + f_w ≤ 18` ceiling
 without contributing anything to the numerator of `h`. Going `f_w = 8 → 0` at `f_X = 8` is
 worth `h: 0.250 → 0.318` and `λ: 3,321 → 2,775`.
 
-**Recommended case-study parameters:** `f_X = 8, f_w = 0`, worst-case bound,
-`q = 2^29.3`-ish prime, `h = 0.318`, `m = 73`, `λ = 2,775`. Native arithmetic, no leakage
-from the bound, `A = 4σ` valid. If Week 7 shows `f_w = 0` stalls convergence, `f_X = 6,
-f_w = 4` is the next native-feasible point at `h = 0.250`.
+**Recommended case-study parameters**, revised after study E:
+
+```
+f_X = f_y = 7      A_X = 4σ       f_w = 4       A_w = 2       d = 2
+q = 1,468,006,403  (log2 q = 30.45, native)     B = 734,003,200
+h = 0.273          m = 77         λ = 3,081     ε_c = 0.0016
+```
+
+The table above, read on `h` alone, points at `f_X = 8, f_w = 0` (`h = 0.318`, `λ = 2,775`).
+**That configuration does not train** — study E measures it 52% above the OLS loss, because
+a unit weight step annihilates the optimum. `f_w = 4` is the smallest precision that works,
+and once `f_w = 4` is fixed the native ceiling `log2 q ≤ 31.5` caps `f_X` at 7. `A_w = 2`
+rather than 4 because it costs nothing here — same `m`, same `λ` — while doubling the
+headroom over the measured peak `|w_t| = 0.60`.
+
+So the operating point is not chosen by maximising `h`; it is the `h`-best point that
+*also* satisfies R5 and stays under the tooling ceiling. Worth presenting that way, because
+it is the moment the privacy metric and the utility metric actually conflict.
 
 ---
 

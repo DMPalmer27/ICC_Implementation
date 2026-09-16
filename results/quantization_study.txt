@@ -122,4 +122,31 @@ seed = 0; every number below is reproducible from this script
   rounding. 'err vs float' is input quantisation only, and at f_w = 4 it is
   dominated by the weight precision, not by f_X = 8.
 
+==============================================================================
+  E. Gradient descent vs weight precision f_w (the constraint that sets f_w)
+==============================================================================
+  f_X = 7, A_w = 2, 400 steps, eta = 0.05
+  exact OLS optimum w* = [ 0.1938 -0.0994  0.6019], loss = 0.312694
+  max |w*| = 0.6019, cond(X^T X) = 4.0
+
+ f_w     step               quantised w*  final loss  excess vs OLS  peak |w_t|
+   0   1.0000              [ 0. -0.  1.]    0.475375       1.63e-01       0.547
+   2   0.2500        [ 0.25 -0.    0.5 ]    0.314519       1.82e-03       0.635
+   4   0.0625  [ 0.1875 -0.125   0.625 ]    0.312975       2.82e-04       0.596
+   6   0.0156  [ 0.1875 -0.0938  0.6094]    0.312698       4.49e-06       0.602
+   8   0.0039  [ 0.1953 -0.0977  0.6016]    0.312695       1.11e-06       0.604
+
+  f_w = 0 lands 52% above the OLS loss: not a precision tradeoff but a
+  dead zone. Two of the three optimal weights quantise to exactly zero, so the
+  Xw term of the gradient is mostly absent and descent limit-cycles.
+  f_w = 4 costs 9.0e-04 relative excess loss and f_w = 6 reaches 1.4e-05, so f_w = 4
+  is the operating point. Cost of insisting on it: 306 extra workers versus the
+  h-optimal f_w = 0 (lambda 3,081 vs 2,775) -- the honest price of a usable model.
+
+  peak |w_t| = 0.60 against the declared A_w = 2: every query
+  was admitted by the budget, with headroom. A_w is a PRE-COMMITMENT, not a
+  measurement -- justified a priori by |w*| <= 1/lambda_min(correlation matrix),
+  so A_w = 2 covers any design with lambda_min >= 1/2. Do not read A_w off the
+  data: that is the same leak as reading B off the data (section 7.1).
+
 wrote 24 budget rows to results/quantization_budget.csv
