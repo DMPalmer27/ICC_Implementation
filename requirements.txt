@@ -1,0 +1,9 @@
+# Direct dependencies of the ICC implementation. Install into the project venv:
+#   .venv/bin/pip install -r requirements.txt
+#
+# galois/numpy are all icc/ needs; the rest are used only by tools/ and tests/.
+galois==0.4.10          # GF(q) arrays; note native uint32 arithmetic only while q <= 3037000499
+numpy==2.3.5
+scipy==1.17.1           # tools/quantization_study.py: exact discretised-Gaussian entropies
+scikit-learn==1.9.0     # the load_diabetes case study
+pypdf==6.18.1           # Written_Resources/extract_papers.py

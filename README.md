@@ -8,12 +8,12 @@ Master's thesis work, Daniel Palmer (d.m.palmer@wustl.edu), advised by Netanel R
 ## Layout
 
 ```
-icc/        implementation (config, client, server, worker, utils)
+icc/        implementation (config, client, server, worker, utils, quantize)
 tests/      test_icc.py (validation suite + report tables), test_regression.py (fast checks)
-tools/      feasibility.py (parameter feasibility instrument)
+tools/      feasibility.py (parameter feasibility), quantization_study.py (quantisation measurements)
 results/    saved suite output and raw CSV rows — inputs to the write-up
-docs/       PLAN.md (semester plan), WEEK1_FINDINGS.md (optimization pass write-up)
-Written_Resources/   the paper and the Spring 2026 report
+docs/       PLAN.md (semester plan), WEEK1_FINDINGS.md, QUANTIZATION.md (Week 3 design doc)
+Written_Resources/   the papers and the Spring 2026 report, plus extracted/ plain text
 main.py     one end-to-end demo run
 ```
 
@@ -22,7 +22,9 @@ main.py     one end-to-end demo run
 
 ## Running
 
-Requires the project venv (Python 3.11, `galois` + `numpy`). Run from the repo root:
+Requires the project venv (Python 3.11). `icc/` itself needs only `galois` and `numpy`;
+`tools/` and `tests/` additionally use `scipy`, `scikit-learn` and `pypdf`. See
+`requirements.txt`. Run from the repo root:
 
 ```bash
 .venv/bin/python main.py                       # end-to-end demo
@@ -30,4 +32,11 @@ Requires the project venv (Python 3.11, `galois` + `numpy`). Run from the repo r
 .venv/bin/python tests/test_icc.py             # ~9 s  — full suite, prints report tables
 .venv/bin/python tests/test_icc.py --fast      # ~2.5 s
 .venv/bin/python tools/feasibility.py --csv results/feasibility_sweep.csv
+.venv/bin/python tools/quantization_study.py --csv results/quantization_budget.csv
 ```
+
+## Where the work stands
+
+Weeks 1–2 (performance and Theorem 1 correctness) and Week 3 (quantisation of real-valued
+data into `F_q`) are done; see `docs/WEEK1_FINDINGS.md` and `docs/QUANTIZATION.md`. Open
+questions for Raviv are collected at the end of `docs/PLAN.md`.

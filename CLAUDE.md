@@ -55,7 +55,8 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | `docs/PLAN.md` | Fall 2026 semester plan |
 | `docs/WEEK1_FINDINGS.md` | What the Week 1 optimization pass changed and why |
 | `docs/QUANTIZATION.md` | Week 3 design doc: survey of real→`F_q` embeddings, field-size derivation, the entropy bounds, recommended parameters |
-| `Written_Resources/` | The paper + the Spring 2026 report (PDFs, plus `extracted/` plain text) |
+| `Written_Resources/` | The papers + the Spring 2026 report (PDFs, plus `extracted/` plain text) |
+| `requirements.txt` | Direct dependencies; `icc/` needs only `galois` + `numpy` |
 
 ## Notation: paper ↔ code
 
@@ -63,6 +64,12 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 `r` privacy/security parameter · `p` entropy order (`p ≥ 2`) · `ε` smoothing budget ·
 `a` confidence parameter (guarantee holds w.p. `≥ 1 − 1/a`) · `ε_c` mutual-information
 leakage bound · `λ = |I_{d,m}| = C(m+d, d)` = number of workers = download cost.
+
+Quantisation notation is **this project's, not the papers'** — `B`, `A_X`/`A_w`,
+`f_X`/`f_y`/`f_w`, `n_s`, `P`, `ρ_max`, `P_sat`. See `docs/QUANTIZATION.md` §2 for the
+provenance split and two notation collisions to resolve before the paper (`p` is the entropy
+order but `PLAN.md` also uses it for the feature count; `M` is the interpolation matrix, so
+the density bound is `ρ_max`).
 
 Theorem 1: `m ≥ n + p + log_q(1/ε) − H_p(X) + max_R H_p(X_R)`, giving
 `ε_c = p/(p−1) · log_q(1 + a·2^((2p−1)/p)·(1 + q^(−max_R H_p(X_R)))·ε^(1/p))`.
