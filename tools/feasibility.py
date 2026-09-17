@@ -35,7 +35,8 @@ import galois
 import numpy as np
 
 from config import SystemContext
-from utils import build_monomial_matrix, compute_required_m, get_information_set
+from utils import (build_monomial_matrix, compute_required_m, get_information_set,
+                   lambda_workers)
 
 # Beyond this the interpolation matrix stops fitting comfortably in memory
 # (lambda^2 int64: 1225 -> 12 MB, 6000 -> 288 MB, 12000 -> 1.2 GB).
@@ -104,7 +105,8 @@ def estimate(n: int, q: int, h: float, r: int, p: int = 2,
     :return: Feasibility row with timing fields unset
     """
     m = required_m(n, q, h, r, p, epsilon, d)
-    lam = math.comb(m + d, d)
+    # not math.comb(m+d, d): that closed form needs d < q. See utils.lambda_workers.
+    lam = lambda_workers(q, d, m)
     matrix_mb = (lam * lam * 8) / 2 ** 20
 
     return Feasibility(n=n, q=q, h=h, r=r, p=p, epsilon=epsilon, d=d,

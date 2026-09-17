@@ -1,0 +1,676 @@
+
+===== PAGE 1 =====
+Perfect Subset Privacy in Polynomial Computation
+Zirui (Ken) Deng⋆, Vinayak Ramkumar†, and Netanel Raviv⋆
+⋆Department of Computer Science and Engineering, Washington University in St. Louis, St. Louis, MO, USA
+†Department of Electrical Engineering–Systems, Tel Aviv University, Tel Aviv, Israel
+d.ken@wustl.edu, vinram93@gmail.com, netanel.raviv@wustl.edu
+Abstract—Delegating large-scale computations to service
+providers is a common practice which raises privacy concerns.
+This paper studies information-theoretic privacy-preserving del-
+egation of data to a service provider, who may further delegate
+the computation to auxiliary worker nodes, in order to compute
+a polynomial over that data at a later point in time. We
+study techniques which are compatible with robust management
+of distributed computation systems, an area known as coded
+computing. Privacy in coded computing, however, has tradition-
+ally addressed the problem of colluding workers, and assumed
+that the server that administrates the computation is trusted.
+This viewpoint of privacy does not accurately reflect real-world
+privacy concerns, since normally, the service provider as a whole
+(i.e., the administrator and the worker nodes) form one cohesive
+entity which itself poses a privacy risk. This paper aims to shift
+the focus of privacy in coded computing to safeguarding the
+privacy of the user against the service provider as a whole, instead
+of merely against colluding workers inside the service provider. To
+this end, we leverage the recently defined notion of perfect subset
+privacy, which guarantees zero information leakage from all
+subsets of the data up to a certain size. Using known techniques
+from Reed-Muller decoding, we provide a scheme which enables
+polynomial computation with perfect subset privacy in straggler-
+free systems. Furthermore, by studying information super-sets in
+Reed-Muller codes, which may be of independent interest, we
+extend the previous scheme to tolerate straggling worker nodes
+inside the service provider.
+Index Terms —Perfect subset privacy, distributed systems,
+coded computing, Reed-Muller codes.
+I. I NTRODUCTION
+As significant computational power is no longer within
+the grasp of individual users, relying on third-party services
+for data storage and computation has become a necessity.
+While this paradigm has commendably allowed smaller, non-
+technological entities to harness capabilities beyond their
+means, it inevitably poses risks related to the privacy of these
+entities.
+In recent years, there has been considerable interest in
+applications of error-correcting codes in distributed compu-
+tations, commonly known as coded computing , in order to
+tackle straggling (i.e., slow) workers, adversarial workers,
+and privacy issues in such systems [14, 21, 22]. Privacy
+guarantees, however, have typically been given in terms of
+some level of restricted collusion among workers, while the
+system administrator is assumed to be trusted.
+Parts of this work were done when V . Ramkumar was a postdoctoral
+researcher in the Department of Computer Science and Engineering in
+Washington University in St. Louis.
+This approach overlooks the common setting where a data
+owner relies on a single untrusted service provider in order
+to store and compute over their data, and the service provider
+itself inherently introduces a privacy risk. Whether the storage
+or computation is distributed internally or not, the service
+provider has access to the entirety of the data, rendering the
+assumption of limited collusion among workers largely irrel-
+evant. This scenario is widely prevalent, as many institutions
+delegate their data in its entirety to service providers such
+as AWS (Amazon Web Services) or Google Cloud. In this
+work, we seek to extend the scope of coded computing and
+develop new techniques to protect privacy against the service
+provider as a whole, while enabling the service provider’s
+internal system administrator (abbrv. admin) to distribute the
+computation internally.
+In our setup, we assume the user has some data x, which is
+internally partitioned to n partsx1,...,x n of some contextual
+meaning (e.g., features). The service provider consists of a
+system admin and workers, among which collusion is not
+restricted. The user cannot communicate with the workers
+directly, but rather through the system admin. The user en-
+codes x using some random key vector k and then sends
+the encoded (privatized) version of the data ˜x to the admin,
+who in turn distributes ˜x to multiple workers. Due to storage
+limitations, the user wishes to discard x and instead only keep
+the key k as side information. At a later point in time, the user
+is interested in computing some polynomial f over x, and
+sendsf to the admin. The goal of the admin is to reply to the
+user with some information A, computed with the aid of the
+workers, so that the user can extract the desired computation
+results, potentially using k. The purpose of this work is to shift
+the “privacy barrier” in coded computing: instead of protecting
+the privacy of the admin against colluding workers, we wish to
+protect the privacy of the user against the service provider as a
+whole. We call the above the single-provider setup, illustrated
+in Figure 1.
+We aim to provide information-theoretic privacy guarantees.
+However, bounding the mutual information between the actual
+and privatized data provides no understanding about which
+parts of the data are revealed, and to what extent. To remedy
+that, we leverage the recently developed notion of perfect
+subset privacy [18], which guarantees zero leakage from all
+subsets of the data up to a certain sizer. This notion provides a
+uniform privacy metric that is easy to understand, and r serves
+as a tunable privacy parameter that trades better privacy for
+higher storage and computation requirements, and vice versa.
+933979-8-3503-8284-6/24/$31.00 ©2024 IEEE
+2024 IEEE International Symposium on Information Theory (ISIT) | 979-8-3503-8284-6/24/$31.00 ©2024 IEEE | DOI: 10.1109/ISIT57864.2024.10619107
+Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:15:19 UTC from IEEE Xplore.  Restrictions apply. 
+===== PAGE 2 =====
+˜x
+AdminUser
+A
+f
+Worker 1
+Worker 2
+Worker 3
+Service provider
+Existing
+privacy
+barrier
+Proposed
+privacy
+barrier
+Ak
+f (x)
+Fig. 1: Shifting the privacy barrier in coded computing.
+We first generalize the encoding scheme from [18] to apply
+to finite fields of any size. Next, by utilizing the known notion
+of information sets in Reed-Muller decoding, we devise a
+scheme which allows the admin to computef over the encoded
+data ˜x, either locally or in a system without straggling workers;
+information sets are used specifically to alleviate the download
+cost of the scheme. Then, in order to adapt the above scheme to
+tolerate straggling workers, we study a notion that we refer to
+as information super-sets for Reed-Muller codes. This notion
+may be of independent interest, and can be seen as related
+to the problem of puncturing Reed-Muller codes efficiently.
+We proceed by devising good straggler-resilient schemes by
+constructing information super-sets for binary Reed-Muller
+codes.
+The rest of the paper is structured as follows. The problem
+setup and computation model are given in Section II. An
+encoding procedure that achieves perfect subset privacy is
+provided in Section III. In Section IV we reduce the user’s
+download cost in a straggler-free system. In Section V we
+devise straggler-resilient protocols using information super-
+sets.
+II. P ROBLEM STATEMENT
+A. The computation model
+Our distributed computation model consists of a storage
+phase and a computation phase. In what follows, the user
+holds uniformly distributed data x = ( x1,...,x n) ∈ Fn
+q
+chosen from X = Unif(Fn
+q ) and encodes the data into a
+privatized version prior to sharing it. Specifically, the user
+encodes x to ˜x ≜ ˜E(x, k), where ˜E is some encoding function
+and k∈ Fm
+q , chosen from K = Unif(Fm
+q ), is some random
+key, with m≪n. Then, the user sends ˜x to the admin, who
+further encodes ˜x to ˆx ≜ ˆE(˜x) = ( ˆx1,..., ˆxN ), where ˆE
+is another encoding function. The admin distributes ˆx to N
+workers, with worker i∈ [N ] (where [N ] ≜{1, 2,...,N })
+storing ˆxi. The user wishes to discard x and only keep k as
+side information, which requires less storage. We call this the
+storage phase of the model.
+At a later point, the user is interested in computing f (x),
+where f : Fn
+q → Fq is a multivariate polynomial of total
+degree at most d and individual degree at most q− 1 (i.e.,
+d < n(q− 1)). The polynomial f is not known during the
+storage phase. The user sends f to the admin, who then sends
+it to the N workers. For i∈ [N ], worker i performs some
+computation over ˆxi, and returns the results to the admin.
+The admin aggregates the results into some information A
+that is sent back to the user; A along with side information k
+should suffice for decodingf (x). We call this the computation
+phase of the model. Among those N workers, however, S
+ones may straggle, i.e., not return a response in a timely
+manner, and the admin must be able to provide the user with
+sufficient information to decode f (x) even in the absence of
+the computation results from the stragglers.
+Remark 1. For simplicity, we assume the user is interested
+in computing f on a single x, unlike the common system as-
+sumption of multiple x’s [22]. Our setting can be generalized
+to multiple x’s (e.g., a dataset with multiple datapoints, or a
+matrix with many columns) by straightforward repetition.
+B. Perfect subset privacy
+Let ˜X be the random variable which is induced by the
+data distribution X, the distribution of the key K, and the
+function ˜E, i.e., ˜X = ˜E(X,K ). An encoding scheme is
+called perfectly private [18] if the transformed and original
+data have zero mutual information, i.e., I(X; ˜X) = 0 . Perfect
+privacy is a very strong notion, which requires a key as
+big as the data itself [5]; our scheme would trivialize under
+such requirements, as no storage saving would be possible.
+Therefore, we must resort to limited information leakage.
+However, guarantees of the form I(X; ˜X)≤ ϵ are rather
+vague, since they provide no insight about which part of the
+data is revealed. To this end, we leverage the notion of perfect
+subset privacy, first developed in [18] by generalizing perfect
+sample privacy of [16]. To define this notion, let
+ [n]
+r
+
+be the
+collection of all subsets of [n] of size r. For anyR⊆ [n], we
+use the notationXR ≜ (Xi)i∈R, and later extend this notation
+to matrices and their columns in a natural way.
+Definition 1. [18, Def. 1] For a privacy parameter r∈ [n],
+an encoding procedure is said to satisfy r-subset privacy if
+I(XR; ˜X) = 0 for allR∈
+ [n]
+r
+
+.
+This notion of r-subset privacy provides uniform protection
+for all r-subsets of the data with a tunable parameter r. It is
+easy to show [16, 18] that r-perfect subset privacy implies
+that I(X; ˜X)≤ (n−r) log2q bits. Therefore, it can be seen
+as a special case of bounding information leakage, which has
+additional uniform and clear guarantees regarding the structure
+of the privacy protection. It is to be noted that perfect subset
+privacy and the popular notion of differential privacy [6] are
+two different privacy paradigms, and that neither implies the
+other, as explained in [18]. We also remark that perfect subset
+privacy is different from collusion resistance [3, 22], which
+requiresI(X; ˜XR) = 0 for allR∈
+ [n]
+r
+
+. Furthermore, perfect
+934Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:15:19 UTC from IEEE Xplore.  Restrictions apply. 
+===== PAGE 3 =====
+subset privacy is to be distinguished from the notion ofindivid-
+ual security [2, 4, 13, 20], which states that I( ˜XR;XQ) = 0
+for all R∈
+ [n]
+r
+
+andQ∈
+  [n]
+n−r
+
+. Neither of these notions
+is relevant for our problem definition, since in our setting the
+service provider has access to ˜X in its entirety.
+C. Performance metrics
+We say that any scheme that realizes the computation model
+in Section II-A is an (n,q,r,d,S )-scheme, where n is the
+length of the data x held by the user, q is the field size, r is
+the privacy parameter, d is the maximum total degree of f,
+and S is the maximum number of stragglers in the system.
+Below are the relevant metrics by which we judge the merit
+of such schemes.
+• The number of workers , measured by the parameter N.
+• Download cost , measured by the number D of Fq
+symbols the user needs to download in order to complete
+the decoding process.
+• Side information, measured bym, the size of the random
+key k. As mentioned before, we would likem to be much
+smaller thann, given the limited storage capability of the
+user.
+We would like to minimize all three quantities, and indeed,
+Section III deals with minimizing the amount of side infor-
+mation held by the user, Section IV addresses the problem of
+reducing download cost, and Section V optimizes the number
+of workers needed for computation.
+III. O BTAINING r-SUBSET PRIVACY
+In this section, we present an encoding procedure which
+achieves perfect subset privacy. In [18], Raviv et al. presented
+a method that obtains r-subset privacy when the finite field
+is sufficiently large. We first give a brief description of their
+method and then generalize it to finite fields of any size.
+For distinct elements w1,...,w n∈ Fq, let ˜ x≜ x + kV ,
+where k∼ Unif(Fr
+q) and V = V (w1,...,w n) is an r×n
+Vandermonde matrix over w1,...,w n. This method has been
+proven [18, Thm. 1] to achieve r-subset privacy, but it re-
+quires q≥n.
+We now generalize this method to obtain a procedure that
+guarantees subset privacy without any field size restriction.
+Specifically, let
+˜ x≜ x + kG, (1)
+where k∼ Unif(Fm
+q ) and G∈ Fm×n
+q is a generator matrix
+of any [n,m ]q linear codeC that satisfies dmin(C⊥)≥r + 1,
+where dmin(·) denotes minimum Hamming distance and C⊥
+is the dual code of C. This implies that for all R ∈
+ [n]
+r
+
+,
+GR∈ Fm×r
+q has full rank.
+Remark 2. Notice that m≥ r according to the Singleton
+bound, and the equality is achieved with Maximum Distance
+Separable (MDS) codes. For example, the scheme in [18]
+achieves equality with Reed-Solomon codes whose generator
+matrices are Vandermonde matrices.
+Remark 3. In our encoding scheme, there is an inherent
+tradeoff between field size and number of required keys.
+For example, say n = 16 and r = 3 , which implies that
+dmin(C⊥)≥r + 1 = 4 . If q = 2, then m = 5 keys are needed
+[10], whereas if we consider the field GF (8), then only four
+keys are necessary. The minimum number of keys needed is 3,
+achieved by Reed-Solomon codes when the field size is 16.
+The following theorem establishes that this generalized
+encoding indeed achieves perfect subset privacy. See the full
+version of the paper [8] for a proof.
+Theorem 1. For any r∈ [n], the encoding procedure in (1)
+satisfiesr-subset privacy, i.e.,I(XR; ˜X) = 0 for allR∈
+ [n]
+r
+
+.
+It follows from (1) that ˜ x∈ x +C, i.e., that x and ˜ xbelong
+to the same coset of C. Therefore, it is possible to reduce
+upload cost from n ton−m by communicating to the service
+provider the identity of the coset of C containing x, e.g., by
+computing a syndrome, which in turn identifies a shift vector
+that defines the coset 2. Then, the service provider is able to
+perform computations based on the syndrome and respond to
+the user accordingly. Further details can be found in the full
+version [8].
+Now that we have demonstrated an encoding scheme which
+achieves r-subset privacy for any field size q, we turn our
+attention to devising a compatible computation scheme.
+IV. L OWERING DOWNLOAD COST IN STRAGGLER -FREE
+SYSTEMS
+In this section, we first present a trivial scheme which serves
+as a benchmark. Then, we show that it is possible to reduce
+download cost through evaluation of a dedicated polynomial
+at an information set for Reed-Muller codes.
+The trivial scheme works as follows. The user sends ˜ xas
+defined in (1) to the admin. The admin encodes ˜ xto{˜ x−
+tG|t ∈ Fm
+q} and distributes these to the workers in the
+storage phase. Later in the computation phase, the admin
+gets f from the user. The admin sends the answer A ≜
+(f ( ˜X− tG)|t ∈ Fm
+q ), and then the user can retrieve the
+element that corresponds to the correct key k∈ Fm
+q and get
+the desired result f (x) = f (˜ x−kG). The download cost D of
+the trivial scheme equals qm. This scheme is termed “trivial”
+since it is equivalent to trying all possible guesses for the key.
+We will next show that it is possible to reduce download cost
+significantly, by using information sets for Reed-Muller codes.
+Definition 2. [12] Let C be an [n,k ]q linear code and let
+G∈ Fk×n
+q be a generator matrix for C. Then, a set I∈
+ [n]
+k
+
+is an information set if GI∈ Fk×k
+q is of rank k.
+Intuitively, any codeword can be reconstructed in full by
+observing its entries on any information set. Furthermore, we
+have the following lemma that will be useful later. The proof
+2Interestingly, recent works about privacy of quantized computation over
+the reals [7, 9, 17] employed a similar strategy of communicating a syndrome
+for saving upload costs, albeit in a very different problem setting.
+935Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:15:19 UTC from IEEE Xplore.  Restrictions apply. 
+===== PAGE 4 =====
+follows from the definition of minimum distance of linear
+codes.
+Lemma 1. LetC be an [n,k ]q linear code with minimum
+distance dmin and let G∈ Fk×n
+q be a generator matrix for C.
+Then, every subset of [n] of size n−dmin + 1 contains an
+information set for C.
+We proceed with the definition of Reed-Muller codes [1].
+Definition 3. [1, Def. 1] For parameters d and m, the Reed-
+Muller code over Fq is defined as RMq(d,m ) ≜{Eval(f )|
+f∈ Fq[x], deg(f )≤d}, where deg(·) denotes the total degree
+of a polynomial, and Eval (f ) = (f (z))z∈Fmq .
+The coordinates ofRMq(d,m ) are indexed using theqm el-
+ements of Fm
+q , in an arbitrary order. In [12], an explicit descrip-
+tion of information sets for Reed-Muller codes is provided.
+Specifically, by denoting Fq ≜{α0,...,α q−1}, we have that
+Id,m ≜{(αi1,...,α im )|Pm
+k=1ik≤d, 0≤ik≤q− 1} is an
+information set for RMq(d,m ). In addition, the next lemma
+follows directly from the definitions of information sets and
+Reed-Muller codes.
+Lemma 2. Let h be an m-variate polynomial over Fq of
+total degree d. If evaluations of h at an information set
+for RMq(d,m ) are known, then it is possible to obtain eval-
+uations of h at all other points in Fm
+q by linearly combining
+the evaluations at the information set.
+We now present our scheme based on polynomial evalua-
+tion at information sets for Reed-Muller codes. The scheme
+assumes that the total degree of f is less than m(q− 1); that
+is, d<m (q− 1). Otherwise, RMq(d,m ) is not well-defined.
+The admin encodes ˜ xas defined in (1) to{˜ x−tG|t∈I d,m}
+and distributes them to the workers. At a later point, the admin
+receives a multivariate polynomialf of total degreed<m (q−
+1) from the user. Define a new multivariate polynomial g :
+Fm
+q → Fq as
+g(t) ≜f (˜ x− tG) (2)
+for all t∈ Fm
+q . It can be seen that the total degree of g is at
+most d, and that g(k) = f (x). The admin obtains
+A ≜ (f (˜ x− tG)|t∈I d,m) (3)
+from the workers and sends it to the user. Since the user
+has now received evaluations of g at an information set
+for RMq(d,m ), it follows from Lemma 2 that the user is
+able to compute g(k) = f (x) fromA and the key k.
+It is straightforward to see that this scheme based on infor-
+mation set evaluations reduces download cost of the user with
+respect to the trivial scheme, provided thatd<m (q−1). To be
+precise, D now equals the size of the information set, |Id,m|,
+which is again equal to the dimension of the code RMq(d,m ),
+written in the sequel as λ(q,d,m ). Note that to conclude the
+computation the user combines thoseD =λ(q,d,m ) elements
+linearly, which is normally much less costly than computing f
+locally since f is a polynomial on n variables.
+Theorem 2. Assuming d < m(q− 1), the scheme based
+on evaluations at information sets for Reed-Muller codes
+requires download cost D = λ(q,d,m ), where λ(q,d,m ) is
+the dimension of RMq(d,m ).
+It is well known [1] that ifq = 2, we haveλ(q = 2,d,m ) =Pd
+i=0
+ m
+i
+
+, and [11] that if d<q , we have λ(q,d<q,m ) = m+d
+d
+
+. Hence, we have the following reduced download costs.
+Corollary 1. If q = 2 and d<m , then the scheme based on
+evaluation at information sets of Reed-Muller codes requires
+download cost D = Pd
+i=0
+ m
+i
+
+. If d < min{q,m (q− 1)},
+then the scheme based on evaluation at information sets of
+Reed-Muller codes requires download cost D =
+ m+d
+d
+
+.
+One example that demonstrates the benefit of using informa-
+tion sets is taking C⊥ as the [n = 2t− 1, k≥n− r
+2t, dmin≥
+r + 1] binary BCH code, where t≥ 3 is an integer and r is an
+even positive integer [15, Sec. 6.1]. The number m of parity
+symbols in C⊥, which equals the dimension of C, is upper
+bounded by r
+2 log2(n + 1). This implies download cost D≤Pd
+i=0
+  r
+2 log2(n+1)
+i
+
+≤ (1 + r
+2 log2(n + 1))d = poly(log(n)),
+assuming d is a constant and r = O(poly(log(n))). This
+download cost is a significant improvement over the trivial
+scheme with D = 2 m > n, at the same side information
+size of m≤ r
+2 log2(n + 1) = poly(log( n)). As a numeric
+example, suppose n = 2 14− 1, r = 10 , and d = 2 , which
+results in m = 70 . The download cost is D≤ 2486 for our
+scheme, whereas D = 2 70 for the trivial scheme.
+V. S TRAGGLER -RESILIENT SYSTEMS
+In this section, we seek to minimize the number of workers
+needed to compute the answer A, in the presence of at
+most S stragglers. Clearly, N = (S + 1)D workers suffice to
+ensure that the admin can provide the answer in both schemes
+described in Section IV. This can be done by storing (S + 1)
+replicas of every ˜x− tG, where t∈ Fm
+q in the trivial scheme
+and t∈I d,m in the information set based scheme. Next, we
+show that it is possible to compute the answer with fewer
+workers than this repetition-based approach.
+First, we use Lagrange Code Computing (LCC) [22], which
+requires large fields. Then, we establish the notion of informa-
+tion super-sets, based on information sets defined previously,
+and devise a scheme without any field size restriction.
+A. LCC-based scheme
+Recall that in the scheme described in Theorem 2, given a
+polynomialf, the admin employs the workers in order to com-
+puteA = (f (˜x− tG)| t∈I d,m). LetId,m ={t1,..., tλ},
+where λ =λ(q,d,m ). The LCC scheme can be applied as-is
+by the admin over the dataset{˜x−tiG|i∈ [λ]}. Namely, the
+admin constructs a univariate polynomial h of degree λ− 1
+which evaluates to ˜x− t1G,..., ˜x− tλG at designated Fq
+elementsω1,...,ω λ∈ Fq, evaluatesh atN distinct evaluation
+points α1,...,α N ∈ Fq with N = (λ− 1)d +S + 1, and
+stores these evaluations in the workers, who apply f over
+them and return the results. The admin can then obtain A
+936Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:15:19 UTC from IEEE Xplore.  Restrictions apply. 
+===== PAGE 5 =====
+Repetition LCC Lemma 4 [8]
+Restriction None q≥N, d<m (q− 1) d<m (q− 1) q = 2, d<m
+N (S + 1)λ (λ− 1)d +S + 1 qm−dmin +S + 1 [8, Theorem 7]
+TABLE I: Summary of various methods. Here λ =λ(q,d,m ) and dmin denotes the minimum distance of RMq(d,m ).
+while tolerating S stragglers. The LCC scheme, however,
+requires N≤q.
+Theorem 3. Using the LCC scheme, an (n,q,r,d,S )-scheme
+exists withN = (λ−1)d+S+1 workers, provided thatq≥N,
+where λ is the dimension of RMq(d,m ). The download cost
+remainsD =λ.
+We note that if d<S , then (λ− 1)d +S + 1< (S + 1)λ.
+Next, we demonstrate another scheme based on the notion of
+information super-sets for Reed-Muller codes, defined shortly.
+The scheme has no field size restriction.
+B. The information super-set scheme
+We first define information super-sets for linear codes.
+Definition 4. LetC be an [n,k,d min]q linear code. Then, for
+any 0 < S < dmin, a multiset T ⊆ [n] is called an S-
+information super-set for C if every (|T|− S)-subset3 ofT
+contains an information set for C.
+Let g be the m-variate polynomial of degree at most d
+defined in (2). Suppose T is an S-information super-set for
+RMq(d,m ), and the number of workers is equal to |T| . The
+admin encodes ˜ xto{˜ x− tG|t∈T} and distributes them
+to the workers. From the definition of information super-
+sets, it follows that even in the presence of S stragglers,
+the admin receives the evaluations of g at an information set
+forRMq(d,m ). It then follows from Lemma 2 that the admin
+can compute the answer A defined in (3). Let L(q,d,m,S )
+denote the minimum size of an S-information super-set for
+RMq(d,m ). We have the following result.
+Theorem 4. For parameters n,q,r,d,S , if there exists
+an [n,m ]q linear code C whose dual code C⊥ has minimum
+distance at least r + 1, and if d<m (q− 1), then there exists
+an (n,q,r,d,S )-scheme with N =L(q,d,m,S ) workers.
+Our information super-set based (n,q,r,d,S )-scheme for
+d < m(q− 1) can be described as follows. Let T be an S-
+information super-set for RMq(d,m ) of size L(q,d,m,S ).
+i) The user encodes x to ˜ x≜ x+kG according to (1) using
+some random key k∼ K = Unif(Fm
+q ) and sends ˜ xto
+the admin.
+ii) The admin encodes ˜ xto ˆ x= ( ˆx1,..., ˆxN ) = ( ˜ x−tG|t∈
+T ) and distributes them to N =L(q,d,m,S ) workers.
+iii) At a later point, the user sends f to the admin, who then
+sends it to the workers. The workers apply f on their
+data, and send the results back to the admin.
+3We say thatS is a k-subset of a multiset T ifS is a multiset of size k,
+and the multiplicity of each element in S is at most its multiplicity in T .
+iv) The admin obtains {f (˜ x− tG)}t∈I, whereI⊆T is an
+information set of RMq(d,m ), and sends A ≜ (f (˜ x−
+tG))t∈Id,m to the user.
+v) The user linearly combines the values in A to ob-
+tain g(k) = f (x).
+Next, in order to understand the value of N in the above
+scheme, we construct explicit S-information super-sets. First,
+we present a lower- and upper-bound on the size of a min-
+imum S-information super-set. The proofs of the following
+lemmas, which are given in the appendix, follow directly from
+the definition of information super-sets (Definition 4), and
+from Lemma 1.
+Lemma 3. L(q,d,m,S )≥λ(q,d,m ) +S, where λ(q,d,m )
+is the dimension of RMq(d,m ).
+Lemma 4. Let dmin be the minimum distance of RMq(d,m ).
+If 0<S <d min, then L(q,d,m,S )≤qm−dmin +S + 1. In
+particular, ifq = 2 then L(q,d,m,S )≤ 2m− 2m−d +S + 1.
+Corollary 2. Letdmin be the minimum distance ofRMq(d,m ).
+Ifd<m (q−1) and 0<S <d min, then the number of workers
+required in the information super-set schemeN≤qm−dmin +
+S + 1. In particular, if q = 2 then N≤ 2m− 2m−d +S + 1.
+We also note that L(q,d,m,S ) ≤ (S + 1)λ(q,d,m ), as
+repeating an information set (S + 1) times will give an S-
+information super-set.
+Notions related to information super-sets have appeared
+previously in the literature. In [19], computational locality
+is studied for Reed-Muller codes. Additionally, some results
+regarding information super-set sizes are implied by existing
+works [11] about punctured Reed-Muller codes. We refer
+readers to the full version [8] for details.
+Due to the importance of computations over F2, in the full
+version [8] we investigate theq = 2 case, and construct several
+explicit information super-sets which outperform the bound in
+Lemma 4. Our results on information super-sets for binary
+Reed-Muller codes can be summarized as follows. We come
+up with an explicit construction of a 1-information super-set
+for RM2(1,m ), which yields L(2, 1,m, 1) = m + 2 if m
+is even and L(2, 1,m, 1)≤ m + 3 if m is odd. An explicit
+construction of a 2-information super-set for RM2(1,m ) of
+size 2m + 1 is also presented, and yet through a greedy
+computer search on a set-theoretic formulation we obtain
+smaller 2-information super-sets for RM2(1,m ). Then, using
+the (u,u +v)-construction of binary Reed-Muller codes [1],
+we come up with a construction of S-information super-
+sets for general binary Reed-Muller codes RM2(d,m ) which
+outperforms Lemma 4 in most cases. In Table I, we give a
+summary of various methods used in this work in terms of
+their restrictions and the number of workers needed.
+937Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:15:19 UTC from IEEE Xplore.  Restrictions apply. 
+===== PAGE 6 =====
+REFERENCES
+[1] E. Abbe, A. Shpilka, and M. Ye, “Reed–muller codes:
+Theory and algorithms,” IEEE Transactions on Infor-
+mation Theory, vol. 67, no. 6, pp. 3251–3277, 2020.
+[2] K. Bhattad, K. R. Narayanan, et al. , “Weakly secure
+network coding,” NetCod, Apr, vol. 104, pp. 8–20, 2005.
+[3] D. Catalano et al. , “Multiparty computation, an intro-
+duction,” Contemporary cryptology, pp. 41–87, 2005.
+[4] A. Cohen, A. Cohen, M. Medard, and O. Gurewitz,
+“Secure multi-source multicast,” IEEE Transactions on
+Communications, vol. 67, no. 1, pp. 708–723, 2018.
+[5] T. M. Cover and J. A. Thomas, Elements of Information
+Theory, 2nd. New-York: Wiley, 2006.
+[6] P. Cuff and L. Yu, “Differential privacy as a mutual in-
+formation constraint,” in Proceedings of the 2016 ACM
+SIGSAC Conference on Computer and Communications
+Security, 2016, pp. 43–54.
+[7] Z. Deng, V . Ramkumar, R. Bitar, and N. Raviv, “Pri-
+vate inference in quantized models,” arXiv preprint
+arXiv:2311.13686, 2023.
+[8] Z. Deng, V . Ramkumar, and N. Raviv, “Perfect subset
+privacy in polynomial computation,” arXiv preprint
+arXiv:2405.05567, 2024.
+[9] Z. Deng and N. Raviv, “Approximate private infer-
+ence in quantized models,” in 2023 IEEE International
+Symposium on Information Theory (ISIT) , IEEE, 2023,
+pp. 1597–1602.
+[10] M. Grassl, Bounds on the minimum distance of linear
+codes and quantum codes , Online available at http://
+www.codetables.de, Accessed on 2024-01-08, 2007.
+[11] V . Guruswami, L. Jin, and C. Xing, “Efficiently list-
+decodable punctured reed-muller codes,” IEEE Trans-
+actions on Information Theory, vol. 63, no. 7, pp. 4317–
+4324, 2017.
+[12] J. D. Key, T. McDonough, and V . C. Mavron, “In-
+formation sets and partial permutation decoding for
+codes from finite geometries,” Finite Fields and Their
+Applications, vol. 12, no. 2, pp. 232–247, 2006.
+[13] D. Kobayashi, H. Yamamoto, and T. Ogawa, “Secure
+multiplex coding attaining channel capacity in wiretap
+channels,” IEEE transactions on information theory ,
+vol. 59, no. 12, pp. 8131–8143, 2013.
+[14] K. Lee, M. Lam, R. Pedarsani, D. Papailiopoulos, and
+K. Ramchandran, “Speeding up distributed machine
+learning using codes,” IEEE Transactions on Informa-
+tion Theory, vol. 64, no. 3, pp. 1514–1529, 2017.
+[15] S. Lin and D. J. Costello, Error Control Coding:
+Fundamentals and Applications . Pearson Prentice Hall,
+2004.
+[16] B. Rassouli, F. E. Rosas, and D. Gündüz, “Data dis-
+closure under perfect sample privacy,” IEEE Transac-
+tions on Information Forensics and Security , vol. 15,
+pp. 2012–2025, 2019.
+[17] N. Raviv, R. Bitar, and E. Yaakobi, “Information the-
+oretic private inference in quantized models,” in 2022
+IEEE International Symposium on Information Theory
+(ISIT), IEEE, 2022, pp. 1641–1646.
+[18] N. Raviv and Z. Goldfeld, “Perfect subset privacy for
+data sharing and learning,” in 2022 IEEE International
+Symposium on Information Theory (ISIT) , IEEE, 2022,
+pp. 1850–1855.
+[19] M. Rudow, K. Rashmi, and V . Guruswami, “A locality-
+based lens for coded computation,” in 2021 IEEE In-
+ternational Symposium on Information Theory (ISIT) ,
+IEEE, 2021, pp. 1070–1075.
+[20] S. Tarnopolsky and A. Cohen, “Coding-based hybrid
+post-quantum cryptosystem for non-uniform informa-
+tion,” arXiv preprint arXiv:2402.08407 , 2024.
+[21] C. Wang and N. Raviv, “Breaking blockchain’s commu-
+nication barrier with coded computation,” IEEE Journal
+on Selected Areas in Information Theory , vol. 3, no. 2,
+pp. 405–421, 2022.
+[22] Q. Yu, S. Li, N. Raviv, S. M. M. Kalan, M.
+Soltanolkotabi, and S. A. Avestimehr, “Lagrange coded
+computing: Optimal design for resiliency, security,
+and privacy,” in The 22nd International Conference
+on Artificial Intelligence and Statistics , PMLR, 2019,
+pp. 1215–1225.
+938Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:15:19 UTC from IEEE Xplore.  Restrictions apply. 

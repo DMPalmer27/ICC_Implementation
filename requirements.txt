@@ -6,4 +6,4 @@ galois==0.4.10          # GF(q) arrays; note native uint32 arithmetic only while
 numpy==2.3.5
 scipy==1.17.1           # tools/quantization_study.py: exact discretised-Gaussian entropies
 scikit-learn==1.9.0     # the load_diabetes case study
-pypdf==6.18.1           # Written_Resources/extract_papers.py
+pypdf==6.18.1           # tools/extract_pdf_text.py

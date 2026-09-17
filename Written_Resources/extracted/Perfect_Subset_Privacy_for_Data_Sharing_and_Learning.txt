@@ -1,0 +1,697 @@
+
+===== PAGE 1 =====
+Perfect Subset Privacy for Data
+Sharing and Learning
+Netanel Raviv
+Washington University in St. Louis
+netanel.raviv@wustl.edu
+Ziv Goldfeld
+Cornell University
+goldfeld@cornell.edu
+Abstract—As the size of modern datasets grows, it becomes
+increasingly common to delegate computational tasks to ser-
+vice providers. Doing so, however, raises privacy concerns.
+Privatization schemes which enable learning algorithms to be
+executed unaltered have been recently popularized under the
+name instance encoding, aiming to circumvent the large overhead
+of traditional cryptographic primitives. In this work we take an
+information/coding-theoretic approach towards instance encod-
+ing. Speciﬁcally, recent works have shown that general-purpose
+data sharing can be achieved without leaking information about
+any individual datapoint (marginally), while maintaining high
+mutual information with the dataset in its entirety. We ﬁrst extend
+this framework to capture the entire privacy-utility tradeoff,
+accounting for the privatization of any subset of the dataset,
+and provide a coding scheme for doing so. Second, we introduce
+a necessary algebraic condition for applying unaltered learning
+algorithms on encrypted data, termed signal preservation , and
+present an additional scheme which guarantees it. Both schemes
+achieve almost maximal mutual information with the entire
+dataset, under appropriate assumptions. The construction relies
+on some classic ideas such as Shamir secret sharing, as well as
+a novel technique called random Hadamard coding.
+I. I NTRODUCTION
+Collecting and processing large amounts of user data is
+central to many modern technologies. As data becomes more
+complex, there is a growing need for sharing it with a service
+provider that can cost-effectively store and process it. How-
+ever, datasets often contain sensitive information, and as such,
+they must be privatized before being shared. In cases where
+the data is shared for learning, it is further desired to preserve
+an appropriate notion of learnability post privatization. The
+latter has been addressed in a series of recent works under
+the term instance encoding [1, 2, 4, 5, 9, 14] which refers
+to encrypting the dataset (into a privatized version thereof
+of the same size) prior to sharing it. By doing so, common
+learning algorithm can be executed as-is, as opposed to the
+large overhead induced by techniques such as homomorphic
+encryption [3, 8, 10] (see Section I-B for details).
+In this paper, we address both the general-purpose and
+learning-oriented dataset privatization questions by proposing
+two schemes, one for each situation. Both schemes guarantee
+information-theoretic subset privacy, deﬁned shortly, while
+maintaining almost maximal informativeness of the privatized
+dataset (up to a penalty due to data uniformization). The latter
+scheme also preserves an algebraic notion of learnability we
+call signal preservation.
+A privatization scheme is a (possibly randomized) transfor-
+mation of the original dataset X n := (X1,...,X n) into its
+privatized version ~X n. A scheme is called perfectly private
+if the transformed and original datasets have zero mutual
+information, i.e., I(X n; ~X n) = 0 . Clearly, perfect privacy is
+of no use for data sharing, since the data processing inequality
+(DPI) implies that privatized data cannot be used for inference
+on the original one. Yet, [11] recently showed that perfect
+privacy can guaranteed for each individual datapoint, i.e.,
+I(Xi; ~X n) = 0 , while maintaining high mutual information
+with the original dataset as a whole. This reveals a potential
+information-theoretic privacy-utility tradeoff. Can this instance
+be generalized to perfect privacy of any subset of datapoints
+up to a given size while maintaining high informativness?
+A. Contributions
+We provide herein an afﬁrmative answer to the question
+above, as delineated next. First, we propose a general-purpose
+data privatization mechanism that guarantees zero mutual
+information between the privatized data and any subset of up
+to r original datapoints. The mechanism ﬁrst uniformizes the
+data by mapping it into a large enough ﬁnite ﬁeld. The trans-
+formed datapoints are then linearly combined with random
+keys as in Reed-Solomon encoding so as to guarantee privacy,
+similar to Shamir secret sharing [12]. While this guarantees
+r-subset privacy, we simultaneously aim to keep the mutual
+information with the entire dataset, i.e., I(X n; ~X n), as high as
+possible. We prove that the proposed schemes maximize this
+mutual information, subject to the subset privacy constraint
+and the uniformization mechanism. An attempt at furnishing
+such a scheme was made in [11, Corollary 4.1], but privacy
+guarantees were provided only to subsets of consecutive dat-
+apoints—a somewhat unnatural restriction. Our mechanism,
+which differs from that of [11], closes this gap, and enables
+privatization of arbitrary r-subsets.
+We then move to the instance encoding setup, where the
+goal is to privatize the dataset such that it is not only
+informative but is also well adapted for learning. Motivated by
+the popularity of deep neural nets for statistical inference, we
+propose signal preservation as the desired notion of learnabil-
+ity. Here ‘signal’ refers to linear transformations of feature
+vectors, while ‘preservation’ means that any signal that can
+be obtained from the original data is also obtainable from the
+privatized version (with possibly different parameters). Signal
+2022 IEEE International Symposium on Information Theory (ISIT)
+978-1-6654-2159-1/22/$31.00 ©2022 IEEE 1850
+2022 IEEE International Symposium on Information Theory (ISIT) | 978-1-6654-2159-1/22/$31.00 ©2022 IEEE | DOI: 10.1109/ISIT50566.2022.9834572
+Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:17:32 UTC from IEEE Xplore.  Restrictions apply. 
+===== PAGE 2 =====
+preservation guarantees that learning tasks that were possible
+on the original data are still possible after privatization.
+Our second main contribution is an adaptation of the
+general-purpose scheme that ensures signal preservation in
+addition to the high mutual information with the entire dataset.
+The adaptation employs random Hadamard encoding in ad-
+dition to the secret sharing techniques used for the general-
+purpose variant. To quantify the information loss, we set
+up a general information-theoretic framework for instance
+encoding and derive an upper bound on the mutual information
+between the clean and privatized datasets for any scheme
+in that framework. We then show that our proposed scheme
+achieves this upper bound up to a small penalty (that has to do
+with a data uniformization step). Altogether this produces an
+instance-encoding mechanism that is r-subset private, nearly
+maximally informative, and preserves signals for learning.
+B. Related Work and Instance Encoding
+Privacy preserving computation on encrypted data is a well-
+studied topic. When the data is distributed, techniques such as
+multiparty computing [6] and Lagrange coded computing [15]
+provide schemes with rigorous privacy guarantees that are
+often amenable to collusion of parties up to a certain threshold.
+Homomorphic encryption (HE) is a popular alternative for the
+two-party case, and several successful attempts of incorporat-
+ing it into a learning framework have been reported [3, 8, 10].
+Yet, these approaches are mired by the intricate nature of
+HE, as well as the drastic computation and communication
+overheads. In addition, HE provides computational rather than
+information-theoretic privacy.
+Instance Encoding has been recently posed as an approach
+to circumvent the overhead of HE and multiparty computing
+while maintaining privacy (e.g., experimentally against known
+attacks), even though the terminology is yet somewhat unset-
+tled. The award-winning work InstaHide [9] offered the ﬁrst
+such discernible attempt. By linearly combining the private
+datapoints with public ones, along with random bit-ﬂipping,
+[9] makes certain privacy claims and demonstrates marginal
+accuracy loss (although the former has been repeatedly chal-
+lenged since [1, 4, 5]). Similar privacy claims have been made
+by NeuraCrypt [14], and then challenged by [2]. Additional
+data transformation mechanisms have been studied in [16, 17],
+analyzed via the PAC learning framework, and incorporated
+differential-privacy guarantees in the single data-owner case.
+Prior works in this genre vary in their assumptions and
+problem setup. Variations include the existence of a public
+dataset that can be utilized for encoding [9], an encoding
+function that is available to the attacker [1], or an attacker
+which may freely choose the data distribution [1]. The authors
+are not aware of any prior attempts to formulate an instance
+encoding framework in an information-theoretic or algebraic
+way (see Remark 1) and the paper at hand does so based on
+the notions of perfect subset privacy and signal preservation.
+We emphasize that our work addresses a two-party setting
+(data owner and a service provider), does not incorporate
+public datapoints, and relies on a choice of a random key
+known only to the data owner. We use the term “instance
+encoding” to describe a signal-preserving privatization scheme
+whose output is a dataset of the same size as the original. As
+described in the next section. our goal is to guarantee perfect
+subset privacy and maximizing mutual information with the
+original dataset.
+II. P RELIMINARIES AND PROBLEM SETUP
+Let X n := ( X1,...,X n) be a dataset of n samples,
+independently and identically distributed (i.i.d.) according
+to PX. We assume thatX is discrete, although the arguments
+can be readily adapted to the continuous case by quantiza-
+tion. The setup considers sharing a (possibly randomized)
+transformation of X n to an external party subject to privacy
+and informativeness constraints. More speciﬁcally, the goal
+is to design a mechanism P ~X n|X n that generates ~X n from
+X n, such that ~X n satisﬁes r-subset privacy (as deﬁned next)
+while maintaining maximalI(X n; ~X n).1 To deﬁne the privacy
+notion, denote [n] :={1,...,n } and let
+([n]
+r
+)
+be the collection
+of all r-subsets of [n]. Also, for any R⊆ [n], we use the
+shorthand XR := (Xi)i∈R.
+Deﬁnition 1 (r-subset privacy). Fixr∈ N. The privatization
+mechanism P ~X n|X n is said to satisfy r-subset privacy if
+I(XR; ~X n) = 0, ∀R∈
+([n]
+r
+)
+, (1)
+where the underlying distribution is the appropriate marginal
+of (X n, ~X n)∼P⊗n
+X P ~X n|X n.
+Remark 1 (Differential privacy). Differential privacy (DP) is
+a popular notion of statistical privacy. It guarantees that the
+change in the statistics of an output query Y (computed on
+the data) as a result of varying a single data entry, will be
+negligible. DP was recently shown to be (almost) equivalently
+expressible in information-theoretic terms as [7] 2
+sup
+i,PXn
+I
+(
+Y ;Xi
+⏐⏐X[n]\{i}
+)
+≤ϵ.
+The statistic that corresponds to our setting is Y = ~X n.
+Althoughr-subset privacy is reminiscent of the information-
+theoretic DP formulation (especially when r = n− 1), there
+are several notable differences. First, there is no distributional
+assumption under the DP framework (hence the supremum
+overPX n), while we assume that X n∼P⊗n
+X withPX known.
+On the other hand, r-subset privacy is more ﬂexible (and
+tunable) and guarantees zero mutual information, while DP
+trivializes when ϵ = 0. Consequently, we see no natural and
+meaningful way to compare these two privacy paradigms.
+III. G ENERAL -PURPOSE PRIVATIZATION MECHANISM
+We propose a general-purpose privatization mechanism;
+a learning-oriented adaptation of the presented scheme is
+1Currently, we do not specify or restrict the amount of external randomness
+the mechanism employs.
+2More precisely, the mutual information constraint is implied by (ϵ, 0)-DP
+and implies (0,
+√
+2ϵ)-DP.
+2022 IEEE International Symposium on Information Theory (ISIT)
+1851
+Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:17:32 UTC from IEEE Xplore.  Restrictions apply. 
+===== PAGE 3 =====
+ܺ௡ Uniformization
+Mechanism
+ܺ௡ܺ௡
+Privatization Mechanism ܲ෨௑೙|௑೙
+Encryption
+Mechanism
+Fig. 1: End-to-end privatization scheme, as a composition of
+uniformization and encryption mechanisms.
+addressed in Section IV. The scheme ﬁrst uniformizes the data
+and then encrypts the uniform version, as shown in Fig. 1.
+Composing the uniformization and encryption mechanisms,
+informativeness and privacy are guaranteed end-to-end.
+Throughout, we use X, ˆX, and ~X for the original, uni-
+formized, and encrypted data random variables, respectively.
+Lowercase letters, e.g., x, ˆx, and ˜x, denote realizations from
+these variables, while calligraphic letters, e.g., X , ˆX , and ~X
+designate their alphabets. Similar notations are used for other
+random variables (e.g., for a random key K from an alpha-
+betK and instances k).
+A. Uniformization Mechanism
+Consider the original data random variable X∼ PX (the
+dataset X n consists of i.i.d. copies of X) and suppose it
+comprises m features, i.e., X = (X (j))m
+j=1. Partition these
+m features into 𝓁 mutually independent subsets (possibly
+with 𝓁 = 1) that are collected into the random variables
+S1,...,S 𝓁. Accordingly, we represent X = (S1,...,S 𝓁) and
+havePX =PS1⊗... ⊗PS𝓁.
+For a natural number p, we say that a discrete random
+variable is p-dyadic if the probability of every element in its
+support is an integer multiple of 1
+p.3 For example, a Bernoulli
+random variable with parameter 1/4 is 4-dyadic, but not 2-
+dyadic. We assume that for each i = 1,...,𝓁 , the random
+variable Si is pi-dyadic for some pi which is an integer
+power of two. With the assumption, we next show how to
+transformPX to Unif({0, 1}d) for some d, as deﬁned shortly.
+As each Si ispi-dyadic, for every s∈ supp(Si) there exists
+an integer ns,i such that P(Si = s) = ns,i/pi. Partition
+{0, 1}log(pi) into |supp(Si)| disjoint subsets {T i
+s}s∈supp(Si)
+of respective sizes {ns,i}s∈supp(Si), which is possible since∑
+s∈supp(Si)ns,i =pi. Set d =∑𝓁
+i=1 log(pi).
+Given a datapoint x = (s1,...,s 𝓁)∈X (a realization of
+X), map it to a vector in {0, 1}d by mapping each si to
+a uniformly chosen element of T i
+si and concatenating the 𝓁
+obtained vectors. Denote the resulting random variable by ˆX,
+and notice that it is a concatenation of 𝓁 mutually independent
+random variables, i.e., ˆX =
+(
+u1(S1),...,u 𝓁(S𝓁)
+)
+, where
+each ui(Si) is given by mapping the respective si to an
+element of{0, 1}log(pi) as described above.
+3Not to be confused with a dyadic random variable, in which all probabil-
+ities are of the form 1/2i for some i ∈ N.
+Proposition 1 (Uniformization). Let X = (S1,...,S 𝓁) for
+mutually independent Si’s. If each Si is pi-dyadic, where pi
+is an integer power of two, then ˆX is uniform over {0, 1}d
+with d =∑𝓁
+i=1 log(pi).
+Proof. Since the Si’s are mutually independent, it sufﬁces
+to prove that each ui(Si) is uniform over {0, 1}log(pi).
+For y ∈ {0,1}log(pi), let T i
+s be the subset in the partition
+of{0, 1}log(pi) to which it belongs, i.e., y∈T i
+s . We thus have
+P
+(
+ui(Si) =y
+)
+= ns,i
+pi
+· 1
+ns,i
+= 1
+pi
+,
+because P
+(
+ui(Si) = y
+)
+= ns,i/pi by assumption and y is
+chosen uniformly from T i
+s , a set of size ns,i.
+B. Encryption Mechanism
+Let ˆX n := ( ˆX1,..., ˆXn) denote the uniformized dataset,
+i.e., it is i.i.d. according to P ˆX = Unif({0, 1}d). Under this
+assumption, we view the datapoints as elements of F2d, the
+ﬁnite ﬁeld of size 2d.
+Fix r ∈ [n], and let K1,...,K r be independent and
+uniform random variables over F2d. The key vector K :=
+(K1,...,K r) serves as external randomness in the encryption
+mechanism. For ﬁxed elements w1,...,w n∈ F2d, deﬁne
+~Xi := ˆXi +
+r∑
+j=1
+wj−1
+i ·Kj, i ∈ [n] (2)
+where ‘+’ and ‘·’ denote the respective operations in F2d. In
+matrix form, (2) can be written as
+(~X1,..., ~Xn) = ( ˆX1,..., ˆXn,K 1,...,K r)· (In G⊺)⊺, (3)
+where In is then×n identity over F2d, and G = Gwn is anr×
+n Vandermonde matrix over w1,...,w n. The relation in (3)
+gives rise to a privatization mechanism, denoted by P ~X n| ˆX n.
+Theorem 1 below describes the privacy and informativeness
+properties of the mechanism P ~X n| ˆX n. To state it, let P ˆX|X
+be the uniformization mechanism described in the previ-
+ous section. The joint distribution of (X n, ˆX n, ~X n) is thus
+P⊗n
+X P⊗n
+ˆX|XP ~X n| ˆX n; notice, in particular, that (X n, ˆX n) are
+i.i.d. copies of (X, ˆX)∼ PXP ˆX|X. The overall privatization
+mechanism from the original dataset X n to the privatized
+version ~X n is given by the marginal conditional distribution
+P ~X n|X n induced from the joint distribution above.
+Theorem 1 (r-subset privacy and informativeness). For any
+r∈ [n], if logn≤d and w1,...,w n∈ F2d are distinct, then
+the end-to-end privatization mechanism P ~X n|X n:
+(1) satisﬁes r-point privacy, i.e., (1) holds; and
+(2) attains I(X n; ~X n)≥ (n−r)H(X)−rH( ˆX|X).
+Proof outline. For (1), observe that XR→ ˆXR→ ~X n forms
+a Markov chain for any R∈
+([n]
+r
+)
+. Hence it sufﬁces to show
+that P
+( ˆXR = ˆxr, ~X n = ˜xn)
+= P( ˆXR = ˆxr)P
+(~X n = ˜xn)
+for every ˆxr and ˜xn. This is proved by marginalizing on
+values of K, and observing that there exists a unique key k
+which decodes (˜xi)i∈R to ˆxr. To prove (2), the chain rule
+2022 IEEE International Symposium on Information Theory (ISIT)
+1852
+Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:17:32 UTC from IEEE Xplore.  Restrictions apply. 
+===== PAGE 4 =====
+and (1) are used to show that I(X n; ~X n) = (n−r)H(X)−
+H(X[n]\R|~X n,XR). The above fact about a unique key is
+used again to bound this expression from below.
+Remark 2 (Theorem 1 assumptions). When r > 1, the
+condition logn ≤ d is necessary to guarantee that dis-
+tinct w1,...,w n exist (the condition can be removed for
+r = 1). One can treat the case of r > 1 and logn > dby
+padding the output of uniformization mechanism with b >0
+independent, uniform random bits, so that ˆX is uniform over
+strings of lengthd+b, with logn≤d+b. This, however, results
+in larger H( ˆX|X), and hence smaller I(X n; ~X n), albeit b
+grows at most logarithmically with n.
+IV. L EARNING -ORIENTED PRIVATIZATION MECHANISM
+Maintaining high mutual information between the original
+and private datasets is a holistic approach. It does not account
+for how that information could be extracted or using which
+processing algorithms. The instance encoding framework aims
+to address this issue and enable certain classes of algorithms
+to access the information through the privacy mechanism.
+We next formulate a necessary condition for a learning
+algorithm to access that information. The goal is to capture
+the idea that learning tasks that were possible on the original
+dataset are still possible after it is privatized.
+Deﬁnition 2 (Hypothesis class preservation). Let f :X1→
+X2 be a mapping between feature spaces and consider two
+hypothesis classes H1 andH2 of functions from X1 orX2,
+respectively, to a label space Y. The map f is said to be
+(H1,H2)-preserving if for any h1∈H 1 there exists h2∈H 2
+such that h1(x) =h2◦f(x), for every x∈X 1.
+Deﬁnition 2 concerns preserving learnability when mapping
+between two ﬁxed hypothesis classes. However, different
+learning algorithms use different hypothesis classes (e.g.,
+depending on architecture), and optimally, we would like to
+account for learnability of multiple models. To that end, we
+note that a variety of models can be represented as h(x) =
+¯h(Wx⊺−v⊺), i.e., they ﬁrst apply a linear transformation on
+the input and only then proceed with further processing. This
+includes, among others, linear classiﬁcation, logistic regres-
+sion, and feedforward neural networks. Restricting attention
+to such models, the next deﬁnition considers mappings that
+preserve the signals wx⊺−b, for an arbitrary weight vector
+w and scalar b, so as to enable learning the entire model.
+Deﬁnition 3 (Signal preservation). A map f : Rd1 → Rd2
+is signal preserving if for every (w1,b 1) ∈ Rd1+1 there
+exists (w2,b 2)∈ Rd2+1, such that
+w1x⊺−b1 =w2f(x)⊺−b2, ∀x∈ Rd1.
+If the privatization mechanism is signal-preserving, then
+any learning algorithm that is based on ﬁnding signals (say,
+to minimize a loss function), can be executed as-is on the
+privatized data. The optimization problem would now seek
+the new signals rather than the original ones (e.g., (w2,b 2)
+instead of (w1,b 1) in Def. 3). A potential disadvantage of this
+approach is increased complexity and risk of overﬁtting, which
+are beyond the scope of this paper. One can readily verify that
+any invertible linear transform is signal preserving, and that
+signal-preserving maps are closed under composition.
+We next devise a signal-preserving uniformization and en-
+cryption schemes. This results in an end-to-end signal preserv-
+ing privatization mechanism due to the composition property.
+A. Uniformization Mechanism
+In the remainder of this paper we use {±1} to represent the
+Boolean ﬁeld F2, instead of {0, 1}. For an integer p that is a
+power of two, let Cp−1 be the punctured Hadamard code of
+lengthp−1; this is a set of p vectors in{±1}p−1, obtained by
+taking the rows of the p×p Sylvester-type Hadamard matrix,
+and omitting its all 1’s column. That is, we deﬁne:
+H2 =
+(1 1
+1 −1
+)
+, H2p =
+(Hp Hp
+Hp −Hp
+)
+, (4)
+and for every p which is an integer power of two, we
+let Hp−1 ∈ {±1}p×(p−1) be Hp with its all 1’s column
+(leftmost) omitted. The set of rows of Hp−1 is called a
+punctured Hadamard code of orderp, and is denoted hereafter
+byCp−1⊆{± 1}p−1. It is well known that Cp−1 is a Boolean
+subspace over F2 of dimension log(p).
+As in Section III, we assume that the data distribution is
+decomposable as X = (S1,...,S 𝓁), with the Si’s mutually
+independent, and each Si ispi-dyadic for some integer power
+of twopi. To obtain signal preservation, we uniformize eachSi
+on Cpi−1 (rather than on{0, 1}log(pi) as done in Section III).
+Speciﬁcally, partition Cpi−1 to |supp(Si)| disjoint sub-
+sets {T i
+s}s∈supp(Si) of sizes {ns,i}s∈supp(Si), and let d′ =∑𝓁
+i=1(pi− 1). A point x = (s 1,...,s 𝓁) drawn from PX is
+mapped to an element of{±1}d′
+by a process we call random
+Hadamard encoding, as follows: map each si to a uniformly
+random element in T i
+si. Denote the resulting random variable
+by ˆXsp, and let ˆX n
+sp = ( ˆXsp,1,..., ˆXsp,n) be the corresponding
+n-fold extension obtained by applying the above process to
+dataset X n. The proof of the following proposition, which is
+omitted, follows the outline of the proof of Proposition 1, and
+then employs the invertibility over R of Hadamard matrices.
+Proposition 2 (Signal-preserving uniformization). Let V :=
+Cp1−1×...×Cp𝓁−1. Random Hadamard encoding is a signal-
+preserving uniformization scheme on V , i.e., ˆXsp∼ Unif(V ).
+B. Encryption Mechanism
+Simply replacing ˆXi by ˆXsp,i in (2) does not guar-
+antee r-point privacy, since ˆXsp,i is not Unif({±1}d′
+),
+but rather Unif(V ). Nevertheless, by properly representing
+F2d′ as {±1} vectors, choosing the wi’s in Gwn judi-
+ciously, and drawing the random keys from Unif(V ) rather
+than Unif({±1}d′
+), we obtain perfect r-point privacy.
+Speciﬁcally, in what follows it is assumed that V represents
+a subspace of F2d′ over a subﬁeld F2m for some m such
+that m|d′ and m≥ logn. That is, V is closed under addition
+and under multiplication by an element from F2m. An explicit
+2022 IEEE International Symposium on Information Theory (ISIT)
+1853
+Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:17:32 UTC from IEEE Xplore.  Restrictions apply. 
+===== PAGE 5 =====
+choice of basis of F2d′ by which V is indeed a subspace
+over F2m will be given in the full version of this paper. Deﬁne
+~Xsp,i := ˆXsp,i +
+r∑
+j=1
+wj−1
+i ·Kj, i ∈ [n] (5)
+where ‘+’ and ‘·’ are the respective operations in F2d′ ,
+w1,...,w n∈ F2m, and Kj ∼ Unif(V ). The relation in (5)
+gives rise to a privatization mechanism P ~X nsp| ˆX nsp
+. Together
+with the random Handamrd encoding uniformization scheme
+P ˆX nsp|X n, we have (X n, ˆX n
+sp, ~X n
+sp)∼P⊗n
+X P⊗n
+ˆXsp|XP ~X nsp| ˆX nsp
+.
+Theorem 2 (r-subset privacy and informativeness). Fix r∈
+[n] and let m satisfy m| gcd(d,d′) and logn ≤ m. If
+w1,...,w n∈ F2m are distinct andV is a subspace over F2m,
+then the end-to-end privatization mechanism P sp
+~X nsp|X n:
+1) satisﬁes r-point privacy:I(XR; ~X n
+sp)=0, ∀R∈
+([n]
+r
+)
+; and
+2) attains I(X n; ~X n
+sp)≥ (n−r)H(X)−rH( ˆXsp|X).
+Theorem 2 follows by an argument similar to that of
+Theorem 1, and is omitted due to space limitations.
+Remark 3. Similar to Remark 2, for r = 1 the relation in (5)
+does not require the existence of n distinct elements in F2m.
+Thus, when r = 1 the above theorem holds even without the
+additional requirement on V , and without the existence of m.
+C. End-to-End Signal Preservation
+By Proposition 2 and the composition property of signal-
+preserving maps, it sufﬁces to show that the encryption mecha-
+nismP ~X nsp| ˆX nsp
+is signal-preserving to obtain end-to-end signal-
+preservation (i.e., for P ~X nsp|X n). Recall from Sections III-A
+and IV-A that d = ∑𝓁
+i=1 log(pi), d′ = ∑𝓁
+i=1(pi− 1), and
+PX =PS1⊗... ⊗PS𝓁 with each Si as pi-dyadic.
+Proposition 3. For r = 1 , the encryption in (2) is signal-
+preserving. For r > 1 and n≤ d, the encryption in (2) is
+signal-preserving with probability at least 1− (1/2 +o(1))n.
+Proof outline. For r = 1 the encryption mechanism amounts
+to multiplying by the matrix diag(K1) over R, and the claim
+follows since diag(K1) is invertible. For r > 1, we have
+that both ˆX n
+sp and ~X n
+sp are uniform over V , which is a
+concatenation of punctured Hadamard codes. By employing
+the structure of Hadamard codes as Boolean subspaces, and
+using a recent result about the invertibility of random {±1}
+matrices [13], this fact is used to show that a sample of
+either ˆX n
+sp or ~X n
+sp, seen as a matrix in Rn×d′
+, is full-rank
+with the aforementioned probability. Therefore, the encryption
+mechanism is invertible over R, hence signal-preserving.
+V. I NFORMATIVENESS UPPER BOUND
+An r-point privacy mechanism should keep I(X n; ~X n) as
+large as possible. Since it is readily veriﬁed that any such
+mechanism has I(X n; ~X n)≤ (n−r)H(X), we ask whether
+the additional uniformization penalties in Theorems 1-2 is
+necessary? To answer this question, we set up an information-
+theoretic framework that captures a broad class of r-point
+privacy mechanisms and derive an upper bound onI(X n; ~X n)
+under this framework. The set up is as follows.
+1) Dataset: Recall that X n contains i.i.d. copies of X∼ PX.
+2) Random keys: We assume the availability of individual and
+shared random keys. Let B1,...,B n be individual keys (i.e.,
+each Bi corresponds to Xi) that are conditionally i.i.d. given
+the datapoints according to PB|X. Further let K be a shared
+key (i.e., the same K is used for all Xi’s) independent of
+(X n,B n) with distribution PK.
+3) Encryption functions: For every i∈ [n], let fi :X×B→
+ˆX be a function that applies the individual key Bi to the
+pointXi, and set ˆXi =fi(Xi,B i). Similarly, letgi : ˆX×K→
+~X be a function that applies the joint keyK to the output offi,
+and denote ~Xi =gi( ˆXi,K ).
+4) Reversibility: We further require that schemes are re-
+versible in the sense that given the keys B1,...,B n,K , one
+can retrieve X n from its encrypted version ~X n. Formally, we
+assume that H( ˆXi|~Xi,K ) = 0 and H(Xi| ˆXi,B i) = 0 for
+all i∈ [n]. Reversibility ensures that a trusted party (who has
+access to the key) can recover that data if they wish to do so.
+5) Subset privacy: The mechanism satisﬁes the r-subset pri-
+vacy requirement from (1).
+Note that both mechanisms from Sections IV and III adhere
+to the above framework. We have the following upper bound
+on the informativeness of such mechanisms.
+Theorem 3. Any decodable scheme with r = o(n/ log(n))
+and|K|≤ 2O(nr) satisﬁes
+I(X n; ~X n)≤ (n−r)H(X)−H(BR|XR, ~XR)
++r· min
+x∈X
+H(B|x)− (n−r)H(X| ˆX) +o(1)
+for everyR∈
+([n]
+r
+)
+.
+Proof outline. Standard information-theoretic identities, sim-
+ilar to those in the proof of Theorem 1, are used to
+show that I(X n; ~X n) = (n −r)H(X)−H(K|XR, ~X n) +
+H(K|X n, ~X n)−(n−r)H(X| ˆX). Then, using the decodabil-
+ity assumption we obtainH(K|XR, ~X n) =H(BR|XR, ~XR).
+The argument relies on
+(n
+r
+)
+tri-partite graphs onX r× ˆX r×~X r
+induced by the functions fi,g i above; the labels of edges
+of this graph (keys B,K which map one vertex to another)
+are vertex disjoint. Lastly, one shows that H(K|X n, ~X n)≤
+r· minx∈XH(B|x) + o(1) by partitioning to typical and
+atypical datasets, with the latter contributing theo(1) term.
+In our schemes, outputs of the uniformization mechanism
+corresponding to different x ∈ X values are disjoint, and
+hence H(X| ˆX) = 0. Moreover, the terms H(BR|XR, ~XR)
+and minx∈XH(B|x) can be seen as quantiﬁers of the
+“uniformity” of X, as both can be nulliﬁed if X is uni-
+form (e.g., by taking B = 0). As our schemes satisfy
+that H(BR|XR, ~XR) = rH(B|X) and H(X| ˆX) = 0, they
+are off by an additive r·minx∈XH(B|x) term from the above
+upper bound. In the full version of this paper, we present a
+(rather esoteric) variant that attains this bound with equality,
+and therefore, no better bound is possible in general.
+2022 IEEE International Symposium on Information Theory (ISIT)
+1854
+Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:17:32 UTC from IEEE Xplore.  Restrictions apply. 
+===== PAGE 6 =====
+REFERENCES
+[1] N. Carlini, S. Deng, S. Garg, S. Jha, S. Mahloujifar,
+M. Mahmoody, A. Thakurta, and F. Tramer, “Is Private
+Learning Possible with Instance Encoding?,” IEEE Sym-
+posium on Security and Privacy (SP), pp. 410–427, 2021.
+[2] N. Carlini, S. Garg, S. Jha, S. Mahloujifar, M. Mah-
+moody, and F. Tramer, “NeuraCrypt is not private,”
+arXiv:2108.07256, 2021.
+[3] H. Chen, Ran G.-B., K. Han, Z. Huang, A. Jalali, K. Laine,
+and K. Lauter, “Logistic regression over encrypted data
+from fully homomorphic encryption,” BMC medical ge-
+nomics, vol. 11, no. 4, pp. 3–12, 2018.
+[4] S. Chen, X. Li, Z. Song, and D. Zhuo, “On in-
+stahide, phase retrieval, and sparse matrix factorization,”
+arXiv:2011.11181, 2020.
+[5] S. Chen, Z. Song, R. Tao, and R. Zhang, “Symmetric
+Boolean Factor Analysis with Applications to InstaHide,”
+arXiv:2102.01570, 2021.
+[6] R. Cramer and I. Damgard, “Multiparty computation,
+an introduction,” Contemporary cryptology, pp. 41–87.
+Birkhäuser Basel, 2005.
+[7] P. Cuff and L. Yu, “Differential privacy as a mutual
+information constraint,” ACM SIGSAC Conference on
+Computer and Communications Security, pp. 43–54, 2016.
+[8] K. Han, S. Hong, J. H. Cheon, and D. Park, “Logistic
+regression on homomorphic encrypted data at scale,” Con-
+ference on Artiﬁcial Intelligence (AAAI), vol. 33, no. 1,
+pp. 9466–9471. 2019.
+[9] Y . Huang, S. Zhao, K. Li, and S. Arora, “Instahide:
+Instance-hiding schemes for private distributed learning,”
+International Conference on Machine Learning, pp. 4507–
+4518, 2020.
+[10] M. Miran, Y . Song, S. Wang, Y . Xia, and X. Jiang,
+“Secure logistic regression based on homomorphic encryp-
+tion: Design and evaluation.” JMIR medical informatics
+vol. 6, no. 2, e8805, 2018.
+[11] B. Rassouli, F. E. Rosas, and D. Gündüz, “Data dis-
+closure under perfect sample privacy,” IEEE Transactions
+on Information Forensics and Security, vol. 15, pp. 2012-
+2025, 2019.
+[12] A. Shamir, “How to share a secret,” Communications of
+the ACM, vol. 22(11), pp. 612–613, 1979.
+[13] K. Tikhomirov, “Singularity of random Bernoulli matri-
+ces,” Annals of Mathematics, vol. 191, no. 2. pp. 593–634,
+2020.
+[14] A. Yala, H. Esfahanizadeh, R. D‘Oliveira, K. R. Duffy,
+M. Ghobadi, T. S. Jaakkola, V . Vaikuntanathan, R. Barzi-
+lay, and M. Medard, “NeuraCrypt: Hiding Private Health
+Data via Random Neural Networks for Public Training,”
+arXiv:2106.02484, 2021.
+[15] Q. Yu, S. Li, N. Raviv, S. M. M. Kalan, M.
+Soltanolkotabi, and S. A. Avestimehr, “Lagrange coded
+computing: Optimal design for resiliency, security, and pri-
+vacy,” International Conference on Artiﬁcial Intelligence
+and Statistics, pp. 1215–1225, 2019.
+[16] H. Xiao and S. Devadas, “The Art of Labeling: Task Aug-
+mentation for Private (Collaborative) Learning on Trans-
+formed Data,” IACR Cryptology ePrint Archive, 2021.
+[17] H. Xiao and S. Devadas, “DAUnTLeSS: Data Aug-
+mentation and Uniform Transformation for Learning with
+Scalability and Security,”IACR Cryptology ePrint Archive,
+2021.
+2022 IEEE International Symposium on Information Theory (ISIT)
+1855
+Authorized licensed use limited to: WASHINGTON UNIVERSITY LIBRARIES. Downloaded on January 30,2026 at 06:17:32 UTC from IEEE Xplore.  Restrictions apply. 

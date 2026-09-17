@@ -440,5 +440,18 @@ standardization, better conditioned at low feature counts, and no need to fetch 
 - **Straggler tolerance / information super-sets.** `utils.get_information_superset` stays
   as the unrunnable prototype it is; do not build against it. The 2024 Deng–Ramkumar–Raviv
   constructions are no longer a Week-1 blocker. Note the limitation in the paper.
+
+  Two defects to fix *before* it is ever picked up again, found by reading the source
+  (`docs/PREDECESSOR_PAPERS.md` §5e): it targets size exactly `λ + S`, which is Lemma 3's
+  **lower bound** and not known to be achievable — the general guarantees are
+  `q^m − dmin + S + 1` and `(S+1)λ` — so its `"Field size too small"` error misdiagnoses
+  the failure; and Definition 4 is stated for **multisets**, but the prototype skips
+  duplicate points, so it cannot represent the repetition construction that is the one
+  always-achievable bound.
+
+- **Syndrome-based upload** (`n → n−m`, 2024 paper §III). Since `x̃ ∈ x + C`, the user can
+  upload a syndrome identifying the coset instead of the full vector. `Client.encode_data`
+  sends all `n` symbols. Self-contained, unimplemented, and adjacent to the Week 3 work —
+  the paper's own footnote 2 links it to quantized computation over the reals.
 - Repeated-query leakage analysis (next semester's core question).
 - Logistic regression / losses without closed forms.

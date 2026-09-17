@@ -23,7 +23,7 @@ wraps, and you are done; larger `q` is only a performance cost.
 ICC breaks that. Here `q` appears in the privacy analysis too, through Theorem 1:
 
 ```
-m ≥ n + p + log_q(1/ε) − H_p(X) + max_R H_p(X_R),      λ = C(m+d, d) workers
+m ≥ n + p + log_q(1/ε) − H_p(X) + max_R H_p(X_R),   λ = dim RM_q(d,m) workers
 ```
 
 The entropy terms are in `log_q` units, so the per-symbol entropy is a **ratio**
@@ -50,7 +50,7 @@ one of them is free:
 
 With that caveat, `m ≈ n(1 − h) + r·h + p + log_q(1/ε)`. A field that is 10 bits larger
 than necessary does not cost a
-constant factor; it lowers `h`, raises `m`, and raises the worker count `λ = C(m+d, d)`
+constant factor; it lowers `h`, raises `m`, and raises the worker count `λ`
 super-linearly. Measured below: 4.2 wasted bits of `q` at `n = 100` cost ~5 key symbols and
 ~400 workers.
 
@@ -78,6 +78,22 @@ The ICC polynomial-computation paper's footnote 2 points at the same cluster. Wo
 as the closest prior art and distinguishing on exactly this axis: here the data is
 continuous and the model is public.
 
+The closer contrast is *within* the lineage. The 2022 paper's **signal preservation**
+(Def. 3) is the alternative route to learning on private data: privatise so that
+`w₁x − b₁ = w₂f(x) − b₂`, and an ordinary learning algorithm runs **unaltered** on `X̃`,
+since linear/logistic regression and feedforward nets only ever see linear functionals. That
+is *instance encoding*, and it is not what ICC does — ICC recovers `f(x)` exactly through a
+query protocol and supports any polynomial of degree `≤ d`, at the cost of `λ` workers per
+query. Note that fixed-point quantisation is **not** signal preserving (clipping and
+rounding are not linear), which costs nothing here but would rule this pipeline out of the
+2022 route entirely. See `docs/PREDECESSOR_PAPERS.md` §3.
+
+One more line worth quoting in the introduction: the 2022 paper assumes discrete data
+*"although the arguments can be readily adapted to the continuous case by quantization"*
+(§II). That single clause is the only treatment of quantisation anywhere in the lineage.
+This document is what happens when it is actually carried out — and §11's `h < 1/d` ceiling
+is the reason it is not the formality that phrasing suggests.
+
 ---
 
 ## 2. Notation, and where each symbol comes from
@@ -85,7 +101,8 @@ continuous and the model is public.
 Nothing in this document may silently look like paper notation when it is not, so:
 
 **From the 2024 paper** (Deng–Ramkumar–Raviv, *Perfect Subset Privacy in Polynomial
-Computation*) — the scheme structure: `λ(q,d,m) = C(m+d,d)` worker count, `I_{d,m}`
+Computation*) — the scheme structure: `λ(q,d,m) = dim RM_q(d,m)` worker count (equal to
+`C(m+d,d)` only when `d < q`, its Corollary 1 — use `utils.lambda_workers`), `I_{d,m}`
 information set of `RM_q(d,m)`, `G`, `k`, `x̃`.
 
 **From the 2025 non-uniform paper** (Tarnopolsky–Deng–Ramkumar–Raviv–Cohen) — the privacy
@@ -103,8 +120,8 @@ neither paper embeds reals, so neither has any analogue of `B`, clipping, or sca
 | `A`, `A_w` | clip bounds in σ, for data and weights | `FixedPointSpec.clip` |
 | `x̂`, `ŷ`, `ŵ` | integer codes after clip-scale-round | `quantize.to_integer` |
 | **`B`** | **hard bound on the magnitude of the INTEGER result, pre-reduction** | §7, `gradient_bound_*` |
-| `ρ_max` | bound on the source probability density | §7, `sup_density` |
-| `P_sat` | probability mass on one clip boundary | §7, `saturation_mass` |
+| `ρ_max` | bound on the source probability density | §8, `sup_density` |
+| `P_sat` | probability mass on one clip boundary | §8, `saturation_mass` |
 | `L`, `q_i` | number of RNS primes and the primes themselves | §4E |
 
 **`B` deserves the emphasis**, because the obligation it encodes has no counterpart in
@@ -266,8 +283,21 @@ Three consequences, two good:
   Theorem 1.
 - But it is a public, data-dependent transform (the empirical CDF), i.e. the same class of
   leakage as open question 4, and a stronger instance of it: the empirical CDF is a far
-  richer function of the data than a per-column mean and variance. **Do not adopt it before
-  that is resolved** (open question 8 below).
+  richer function of the data than a per-column mean and variance.
+
+**And there is a precedent that reframes it.** This is the continuous analogue of the
+*uniformization mechanism* of the 2022 paper (§III-A), which maps a `p`-dyadic source onto
+`{0,1}^d` exactly uniformly by randomised block assignment. Two things carry over. Its
+randomness is **secret and client-side**, so it genuinely adds entropy — the legitimate
+version of the dither idea §4G records as a trap. And its cost is quantified rather than
+hand-waved: `I(X^n; X̃^n) ≥ (n−r)H(X) − r·H(X̂|X)`, with the penalty essentially unavoidable
+(2022, Thm. 3).
+
+The decisive point is *why ICC dropped it*: uniformization needs `P_X`, and ICC's premise is
+that `P_X` is unknown. A quantile transform estimates `P_X` from the sample, so it
+reintroduces precisely the assumption the ICC line was built to remove. **Do not adopt it
+before that is resolved** — and open question 8 is better posed as the lineage question it
+really is (see `docs/PREDECESSOR_PAPERS.md` §5d).
 
 Lloyd–Max is the wrong objective here — it minimises MSE, not entropy — and the
 entropy-constrained scalar quantiser literature (Gray–Neuhoff; Kreitmeier–Linder for the
@@ -351,8 +381,9 @@ precision, not by `f_X`.
 ## 6. Storage-time ordering: `q` is sized against a budget, not a query
 
 **The data is uploaded before any polynomial is sent.** That is not a detail of the
-implementation, it is the shape of the protocol, and it constrains `q` more than §7's
-magnitude bound suggests on its own.
+implementation, it is the shape of the protocol — the 2024 paper states it outright in its
+computation model, *"The polynomial `f` is not known during the storage phase"* (§II-A) —
+and it constrains `q` more than §7's magnitude bound suggests on its own.
 
 At upload the client computes `x̃ = x + kG ∈ F_q^n` and the admin immediately shards it to
 `λ = C(m+d, d)` workers using the information set `I_{d,m}` (`Server.store_data` →

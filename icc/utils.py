@@ -162,10 +162,17 @@ def compute_required_m(context: SystemContext) -> int:
     Both entropy terms must be VECTOR quantities in log_q units (H_p(X) over all n symbols,
     max_R H_p(X_R) over r of them), not per-symbol values -- see compute_p_entropy.
 
-    The max(r, ...) floor is justified by Remark 1 of the ICC paper: a key of size at least r
-    is necessary for r-subset privacy. (The report previously justified it by the Singleton
-    bound, which came from the MDS/uniform predecessor scheme; under ICC the code is random,
-    so Singleton does not apply.)
+    The max(r, ...) floor has two independent justifications in the literature and they agree.
+    ICC Remark 1 states it directly: "ICC schemes must utilize a random key of at least size
+    r", citing the predecessors. The 2024 paper's Remark 2 derives it: the encoding needs
+    dmin(C^perp) >= r+1, and Singleton bounds dmin of the [n, n-m] dual by m+1, so m >= r.
+
+    CORRECTION to the Week 1 note, made after reading the predecessor (docs/PREDECESSOR_PAPERS.md).
+    That note said Singleton "does not apply" under ICC because the code is random. That is
+    wrong: Singleton bounds the minimum distance of EVERY linear code, so the m >= r
+    derivation holds for a random code too. MDS is only where the bound is met with
+    EQUALITY, which is the part specific to the Vandermonde/uniform predecessor. Both
+    citations are valid; the floor itself was never in doubt.
 
     :param context: SystemContext with the system parameters calculated and set
     :return: The minimum value that m can be satisfying Theorem 1
@@ -275,6 +282,35 @@ def build_monomial_matrix(GF: type[galois.FieldArray], points, exponents) -> gal
         M = M * GF(np.stack(powers))[E[:, v]].T
 
     return M
+
+def lambda_workers(q: int, d: int, m: int) -> int:
+    """
+    Number of workers / download cost, lambda(q,d,m) = dim RM_q(d,m) = |I_{d,m}|.
+
+    The closed form C(m+d, d) that CLAUDE.md and docs/PLAN.md quote is only valid when
+    d < q. The 2024 paper's Corollary 1 gives both cases: D = C(m+d, d) if
+    d < min{q, m(q-1)}, and D = sum_{i<=d} C(m, i) when q = 2. For 2 < q <= d neither
+    closed form applies and the set has to be counted, because the individual-degree cap
+    a_i <= q-1 starts removing tuples that C(m+d, d) counts. Verified against the
+    enumeration: (q,m,d) = (31,10,4) gives 1001 = C(14,4); (2,10,3) gives 176 = sum C(10,i)
+    against C(13,3) = 286; (3,8,4) gives 423 against 495 and 163, i.e. neither.
+
+    get_information_set already enumerates correctly at any q -- it caps each entry at
+    q-1 -- so this only matters for callers that want the count without paying for the
+    enumeration. The fast path is taken in the regime the project actually runs in
+    (q ~ 2^30, d = 2).
+
+    :param q: Field size
+    :param d: Max total degree
+    :param m: Number of variables (key length)
+    :return: lambda(q, d, m)
+    """
+    if d < q:
+        return math.comb(m + d, d)
+    if q == 2:
+        return sum(math.comb(m, i) for i in range(d + 1))
+    return len(get_information_set(q, m, d))
+
 
 @functools.lru_cache(maxsize=None)
 def get_information_set(q: int, m: int, d: int) -> list[tuple[int, ...]]:

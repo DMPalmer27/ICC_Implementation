@@ -47,6 +47,7 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | `tests/test_regression.py` | Fast equivalence/invariant checks; keeps pre-optimization implementations as oracles |
 | `tests/conftest.py` | `sys.path` shim; imported explicitly by both suites |
 | `tools/feasibility.py` | Parameter feasibility instrument — reports `m`, `λ`, and **measured** build/solve cost |
+| `tools/extract_pdf_text.py` | Extracts `Written_Resources/*.pdf` to `extracted/*.txt` so citations are checkable |
 | `tools/quantization_study.py` | Seeded measurements behind `docs/QUANTIZATION.md`: entropy-bound validation, field-size budget, residue entropy, end-to-end decodability |
 | `results/full_test_pre_entropy_fix.txt` | Full `test_icc.py` run before the Week 1 entropy fix (baseline) |
 | `results/full_test_post_fix.txt` | Full `test_icc.py` run after it |
@@ -54,6 +55,7 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | `results/quantization_study.txt` / `quantization_budget.csv` | Saved output of `tools/quantization_study.py` |
 | `docs/PLAN.md` | Fall 2026 semester plan |
 | `docs/WEEK1_FINDINGS.md` | What the Week 1 optimization pass changed and why |
+| `docs/PREDECESSOR_PAPERS.md` | Reading notes on the 2022 and 2024 papers; what the code inherits from which, and corrections |
 | `docs/QUANTIZATION.md` | Week 3 design doc: survey of real→`F_q` embeddings, field-size derivation, the entropy bounds, recommended parameters |
 | `Written_Resources/` | The papers + the Spring 2026 report (PDFs, plus `extracted/` plain text) |
 | `requirements.txt` | Direct dependencies; `icc/` needs only `galois` + `numpy` |
@@ -63,7 +65,15 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 `q` field size · `n` data length · `m` key length · `d` max total degree of `f` ·
 `r` privacy/security parameter · `p` entropy order (`p ≥ 2`) · `ε` smoothing budget ·
 `a` confidence parameter (guarantee holds w.p. `≥ 1 − 1/a`) · `ε_c` mutual-information
-leakage bound · `λ = |I_{d,m}| = C(m+d, d)` = number of workers = download cost.
+leakage bound · `λ = |I_{d,m}| = dim RM_q(d,m)` = number of workers = download cost.
+
+`λ = C(m+d, d)` **only when `d < q`** (2024 paper, Corollary 1); at `q = 2` it is
+`Σ_{i≤d} C(m,i)`, and for `2 < q ≤ d` neither closed form holds. Use `utils.lambda_workers`,
+not `math.comb`. `get_information_set` was always correct — it caps entries at `q−1`.
+
+Most of the scheme is the **2024** paper, not the ICC paper: `I_{d,m}`, `λ`, the `x̃ − tG`
+sharding and the interpolate-then-evaluate decode are all 2024 §IV. Only `compute_required_m`,
+`compute_leakage_bound` and the random `G` are ICC. See `docs/PREDECESSOR_PAPERS.md`.
 
 Quantisation notation is **this project's, not the papers'** — `B`, `A_X`/`A_w`,
 `f_X`/`f_y`/`f_w`, `n_s`, `P`, `ρ_max`, `P_sat`. See `docs/QUANTIZATION.md` §2 for the
@@ -85,6 +95,7 @@ Use the project venv (Python 3.11, `galois` + `numpy`). Run from the repo root:
 .venv/bin/python tests/test_icc.py --fast          # ~2.5 s
 .venv/bin/python tools/feasibility.py --csv results/feasibility_sweep.csv
 .venv/bin/python tools/quantization_study.py --csv results/quantization_budget.csv
+.venv/bin/python tools/extract_pdf_text.py          # refresh Written_Resources/extracted/
 ```
 
 The full suite took ~81 min before the Week 1 pass and now takes ~9 s, so it is cheap to
@@ -126,10 +137,17 @@ These are thesis-math decisions. Raise them; let Daniel decide.
    `_compute_max_subset_p_entropy_empirical` is the old `C(n,r)` brute force, kept for
    reference and explicitly **not** an oracle for the former. Don't use it to compute `m`.
 
+5. **The Week 1 Singleton note was itself wrong** (found by reading the predecessor; see
+   `docs/PREDECESSOR_PAPERS.md` §5a). It claimed Singleton "does not apply" under ICC
+   because the code is random. Singleton bounds `dmin` of *every* linear code, so the
+   2024 paper's Remark 2 derivation (`dmin(C⊥) ≥ r+1` and `dmin ≤ m+1` ⟹ `m ≥ r`) holds for
+   a random code too; MDS is only where equality is met. ICC Remark 1 states the same floor
+   independently. Behaviour was never affected — only the docstring reasoning, now fixed.
+
 Resolved in the Week 1 pass (`week1-2-optimizations`) — do not re-report as bugs:
-per-symbol vs vector entropy scaling, the two entropy paths disagreeing, the
-`max(r, …)` justification (now Remark 1, not Singleton), the missing `d < m(q−1)`
-assertion, and the unused `generate_vandermonde_G` import.
+per-symbol vs vector entropy scaling, the two entropy paths disagreeing, the missing
+`d < m(q−1)` assertion (confirmed verbatim in the 2024 paper §IV), and the unused
+`generate_vandermonde_G` import.
 
 ## Working preferences
 
