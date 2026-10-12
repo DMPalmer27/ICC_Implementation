@@ -19,3 +19,8 @@ class SystemContext:
     H_p_X: float  = None #p-entropy of the data
     max_H_p_X_R: float = None #Max p-entropy of any r-subset of the data
     m: int = None #Key length
+    # Declared bound on |stored integer code|, i.e. X̂max = floor(A_X * 2^f_X) for quantised
+    # data. Public, fixed before upload, and what the server's overflow check bounds queries
+    # against (query.check_query). None means the data is native F_q data with no integer
+    # meaning, so results are exact field values and overflow is not defined.
+    max_input: int = None

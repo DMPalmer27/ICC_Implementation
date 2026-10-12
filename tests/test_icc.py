@@ -45,6 +45,7 @@ warnings.filterwarnings("ignore")  # suppress galois deprecation noise
 from config import SystemContext
 from client import Client
 from server import Server
+from query import variables
 from utils import (
     generate_random_G,
     compute_p_entropy,
@@ -166,24 +167,31 @@ def build_context_and_data(q=31, n=10, d=2, r=5, p=2,
     return ctx, GF, x
 
 
+# Symbolic data variables for building query polynomials. Wider than any n used below; a
+# polynomial only needs the variables it mentions.
+V = variables(16)
+
+
 def run_one_trial(ctx, GF, x, poly_fn, seed=None):
     """
     Execute one full storage + computation + decoding cycle.
     Returns (success: bool, decoded_val, expected_val, elapsed_s).
     """
-    if seed is not None:
-        np.random.seed(seed)
-
-    client = Client(ctx, GF)
+    # One Generator for both draws (G, then the key at encode time). np.random.seed would not
+    # reach them: galois draws only from the seed it is handed.
+    rng = np.random.default_rng(seed)
+    client = Client(ctx, GF, rng=rng)
     server = Server(ctx, GF)
-    G = generate_random_G(GF, ctx.m, ctx.n)
+    G = generate_random_G(GF, ctx.m, ctx.n, rng=rng)
 
     t0 = time.perf_counter()
     x_tilde = client.encode_data(x, G)
     server.store_data(x_tilde, G)
-    points, results = server.compute_request(poly_fn)
-    decoded = client.decode_result(points, results)
+    decoded = client.decode_result(server.compute_request(poly_fn))
     elapsed = time.perf_counter() - t0
+    if not decoded.ok:
+        return False, None, poly_fn(x), elapsed
+    decoded = decoded.value
 
     expected = poly_fn(x)
     return bool(decoded == expected), decoded, expected, elapsed
@@ -202,17 +210,17 @@ def test_correctness():
     # Format: "name": (polynomial_fn, n, d, r)
     polynomials = {
         "f = x0² + x1·x2          (degree 2, 3 vars)":
-            (lambda data: data[0]**2 + data[1]*data[2], 10, 2, 5),
+            (V[0]**2 + V[1]*V[2], 10, 2, 5),
         "f = x0 + x1 + x2         (degree 1, linear)":
-            (lambda data: data[0] + data[1] + data[2], 10, 2, 5),
+            (V[0] + V[1] + V[2], 10, 2, 5),
         "f = x0·x1 + x2·x3        (degree 2, 4 vars)":
-            (lambda data: data[0]*data[1] + data[2]*data[3], 10, 2, 5),
+            (V[0]*V[1] + V[2]*V[3], 10, 2, 5),
         "f = x0² + x1² + x2²      (pure squares)":
-            (lambda data: data[0]**2 + data[1]**2 + data[2]**2, 10, 2, 5),
+            (V[0]**2 + V[1]**2 + V[2]**2, 10, 2, 5),
         "f = x0·x1·x2             (degree 3, 3 vars)":
-            (lambda data: data[0]*data[1]*data[2], 6, 3, 3),
+            (V[0]*V[1]*V[2], 6, 3, 3),
         "f = x0·x1·x2·x3          (degree 4, 4 vars)":
-            (lambda data: data[0]*data[1]*data[2]*data[3], 6, 4, 3),
+            (V[0]*V[1]*V[2]*V[3], 6, 4, 3),
     }
 
     TRIALS = trials(10, 2)
@@ -257,7 +265,7 @@ def test_correctness():
     row("-" * 24, "-" * 8, "-" * 6, "-" * 6, "-" * 10,
         widths=(24, 8, 6, 6, 10))
 
-    fn_var = lambda data: data[0] + data[1]
+    fn_var = V[0] + V[1]
     all_var_ok = True
     for (q_v, n_v, d_v, r_v) in param_configs:
         ctx_v, GF_v, x_v = build_context_and_data(q=q_v, n=n_v, d=d_v, r=r_v, seed=42)
@@ -284,7 +292,7 @@ def test_correctness():
     subsection("1c · Random key stability (50 independent trials)")
     TRIALS_C = trials(50, 5)
     ctx_c, GF_c, x_c = build_context_and_data(q=31, n=8, d=2, r=4, seed=42)
-    fn_c = lambda data: data[0] ** 2 + data[1] * data[2]
+    fn_c = V[0] ** 2 + V[1] * V[2]
 
     results_c = [run_one_trial(ctx_c, GF_c, x_c, fn_c, seed=i)
                  for i in range(TRIALS_C)]
@@ -457,8 +465,9 @@ def test_entropy_sensitivity():
     for skew in [0.7, 0.9, 0.95]:
         ctx_f, GF_f, x_f = build_context_and_data(
             q=31, n=8, d=2, r=4, skew_frac=skew, seed=6)
-        G = generate_random_G(GF_f, ctx_f.m, ctx_f.n)
-        client_f = Client(ctx_f, GF_f)
+        rng_f = np.random.default_rng(6)
+        G = generate_random_G(GF_f, ctx_f.m, ctx_f.n, rng=rng_f)
+        client_f = Client(ctx_f, GF_f, rng=rng_f)
         x_tilde = client_f.encode_data(x_f, G)
         h_before = compute_p_entropy(x_f, 31, ctx_f.p)
         h_after = compute_p_entropy(x_tilde, 31, ctx_f.p)
@@ -478,7 +487,7 @@ def test_edge_cases():
     subsection("5a · r=1 (minimal privacy parameter)")
     ctx_a, GF_a, x_a = build_context_and_data(
         q=31, n=8, d=2, r=1, p=2, skew_frac=0.9, seed=10)
-    fn_a = lambda data: data[0] ** 2 + data[1] * data[2]
+    fn_a = V[0] ** 2 + V[1] * V[2]
     ok_a, _, _, _ = run_one_trial(ctx_a, GF_a, x_a, fn_a, seed=0)
     if ok_a:
         ok(f"r=1: m={ctx_a.m}, decoded correctly ✓")
@@ -488,7 +497,7 @@ def test_edge_cases():
     subsection("5b · Near-deterministic data (1 element has 99% mass)")
     ctx_c, GF_c, x_c = build_context_and_data(
         q=31, n=8, d=2, r=4, p=2, skew_frac=0.99, num_heavy=1, seed=12)
-    fn_c = lambda data: data[0] ** 2 + data[1] * data[2]
+    fn_c = V[0] ** 2 + V[1] * V[2]
     ok_c, _, _, _ = run_one_trial(ctx_c, GF_c, x_c, fn_c, seed=0)
     if ok_c:
         ok(f"Near-deterministic data handled correctly ✓ (m={ctx_c.m})")

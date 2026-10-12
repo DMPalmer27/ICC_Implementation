@@ -321,9 +321,12 @@ class QueryBudget:
 
     The constraint is one-sided, which is what makes it workable. A later query with smaller
     f_w or smaller weights has a smaller magnitude and stays safely inside the window, so the
-    budget only has to be an upper bound. assert_admissible checks a query against it, and
-    the check is cheap and uses only public quantities, so the client can run it before
-    sending anything -- which matters because after upload it cannot detect a violation.
+    budget only has to be an upper bound. The budget is used ONLY to size q. Whether a given
+    query fits is decided exactly, per query, by the server's pre-dispatch gate
+    (query.check_query: sum |c| * max_input^deg <= (q-1)/2), which accepts every query this
+    budget covers and also any query outside the declared ceiling whose own bound still
+    fits. That replaced an earlier per-query budget check here, which was strictly more
+    conservative and therefore redundant.
 
     The degree d is the harshest entry, and it is structural rather than numeric: the shares
     literally only support evaluation of polynomials in RM_q(d, m). A degree-3 query against
@@ -351,33 +354,6 @@ class QueryBudget:
         """
         return gradient_bound_worst_case(self.n_samples, self.n_features, self.x_spec,
                                          self.w_spec, self.y_spec)
-
-    def assert_admissible(self, w_codes, f_w: int):
-        """
-        Checks one query against the declared budget, before it is sent.
-
-        Two conditions, and together they imply the magnitude bound behind q still holds:
-        the query's scale must not exceed the declared one (f_w <= budget f_w, since the
-        label term carries a public 2^{f_w} multiplier), and the quantised weights must not
-        exceed the declared clip. Anything smaller is safe.
-
-        :param w_codes: Quantised weight vector for this query
-        :param f_w: Fractional bits this query's weights were quantised at
-        :raises ValueError: if the query exceeds what q was sized for
-        """
-        if f_w > self.w_spec.f:
-            raise ValueError(
-                f"query uses f_w = {f_w} but the storage-time budget declared "
-                f"f_w <= {self.w_spec.f}; q was sized for the smaller scale and the result "
-                f"can wrap. Re-upload with a larger budget, or lower f_w for this query."
-            )
-        worst = int(max(abs(int(v)) for v in np.atleast_1d(np.asarray(w_codes)).ravel()))
-        if worst > self.w_spec.max_int:
-            raise ValueError(
-                f"query has max |w_hat| = {worst} but the budget declared "
-                f"<= {self.w_spec.max_int} (clip {self.w_spec.clip} at f_w = "
-                f"{self.w_spec.f}); clip the weights to the declared bound before sending."
-            )
 
 
 @dataclass(frozen=True)
@@ -525,7 +501,7 @@ def gradient_bound_worst_case(n_samples: int, n_features: int,
     ORDERING. w_spec here is a CEILING declared before upload, not the format of the query
     that is about to be sent -- q is frozen when the data is stored, so it cannot be sized
     against a query that has not arrived yet. Prefer QueryBudget.magnitude_bound(), which
-    names that and gives you assert_admissible() to police later queries against it.
+    names that; later queries are policed by query.check_query on the server.
 
     :param n_samples: Number of samples n_s
     :param n_features: Number of features P

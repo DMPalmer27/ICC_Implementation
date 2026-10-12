@@ -13,6 +13,8 @@ Description: Fast regression checks for the Week 1 optimisation pass. Unlike tes
       6-10. quantisation: fixed-point round trips, the balanced-lift sign convention, the
             two no-wraparound bounds, the storage-time query budget, the direction of the
             entropy bounds, and a quantised gradient decoding exactly through the scheme
+      11. the server's overflow gate: query bounds, refusals with a status, the upload
+          box check, and an exact decode at the edge of the window
 
 Usage:
     .venv/bin/python tests/test_regression.py
@@ -28,6 +30,13 @@ import numpy as np
 from config import SystemContext
 from client import Client
 from server import Server
+from query import (
+    Polynomial,
+    QueryStatus,
+    check_query,
+    least_squares_gradient,
+    variables,
+)
 from quantize import (
     POWER_OF_TWO_GRID,
     FixedPointSpec,
@@ -179,31 +188,31 @@ def _build_ctx(q=31, n=10, d=2, r=5, p=2, seed=0):
 def test_decode_exact():
     print("\n2. decode_result recovers f(x) exactly")
     ctx, GF, x = _build_ctx()
-    fn = lambda data: data[0] ** 2 + data[1] * data[2]
+    v = variables(ctx.n)
+    fn = v[0] ** 2 + v[1] * v[2]
 
     failures = 0
     for seed in range(20):
-        np.random.seed(seed)
-        client, server = Client(ctx, GF), Server(ctx, GF)
-        G = generate_random_G(GF, ctx.m, ctx.n)
+        rng = np.random.default_rng(seed)
+        client, server = Client(ctx, GF, rng=rng), Server(ctx, GF)
+        G = generate_random_G(GF, ctx.m, ctx.n, rng=rng)
         server.store_data(client.encode_data(x, G), G)
-        points, results = server.compute_request(fn)
-        if client.decode_result(points, results) != fn(x):
+        decoded = client.decode_result(server.compute_request(fn))
+        if not decoded.ok or decoded.value != fn(x):
             failures += 1
     check(f"20 seeded trials decode exactly", failures == 0, f"{failures} failed")
 
     # Batched right-hand side: two polynomials decoded in one elimination
-    np.random.seed(123)
-    client, server = Client(ctx, GF), Server(ctx, GF)
-    G = generate_random_G(GF, ctx.m, ctx.n)
+    rng = np.random.default_rng(123)
+    client, server = Client(ctx, GF, rng=rng), Server(ctx, GF)
+    G = generate_random_G(GF, ctx.m, ctx.n, rng=rng)
     server.store_data(client.encode_data(x, G), G)
-    f1 = lambda data: data[0] ** 2 + data[1] * data[2]
-    f2 = lambda data: data[3] * data[4] + data[0]
-    points, r1 = server.compute_request(f1)
-    _, r2 = server.compute_request(f2)
+    f1 = v[0] ** 2 + v[1] * v[2]
+    f2 = v[3] * v[4] + v[0]
+    r1 = server.compute_request(f1)
+    r2 = server.compute_request(f2)
 
-    batch = GF(np.stack([np.asarray(GF(r1)), np.asarray(GF(r2))], axis=1))
-    decoded = client.decode_result(points, batch)
+    decoded = [d.value for d in client.decode_results([r1, r2])]
     check("batched (lambda, 2) RHS matches per-polynomial results",
           bool(decoded[0] == f1(x)) and bool(decoded[1] == f2(x)),
           f"got {decoded}, expected [{f1(x)}, {f2(x)}]")
@@ -211,7 +220,7 @@ def test_decode_exact():
     # The cache must not change the answer or grow per call
     before = len(client._M_cache)
     for _ in range(3):
-        client.decode_result(points, r1)
+        client.decode_result(r1)
     check("interpolation cache is reused, not regrown",
           len(client._M_cache) == before, f"{before} -> {len(client._M_cache)}")
 
@@ -285,9 +294,9 @@ def test_required_m_guards():
 def test_server_shares_match_legacy():
     print("\n5. Server.store_data sharding vs legacy loop")
     ctx, GF, x = _build_ctx()
-    np.random.seed(7)
-    client, server = Client(ctx, GF), Server(ctx, GF)
-    G = generate_random_G(GF, ctx.m, ctx.n)
+    rng = np.random.default_rng(7)
+    client, server = Client(ctx, GF, rng=rng), Server(ctx, GF)
+    G = generate_random_G(GF, ctx.m, ctx.n, rng=rng)
     x_tilde = client.encode_data(x, G)
     server.store_data(x_tilde, G)
 
@@ -413,37 +422,42 @@ def test_query_budget_ordering():
     check("budget reproduces the worst-case bound it is built from",
           B == gradient_bound_worst_case(25, 3, budget.x_spec, budget.w_spec))
 
-    w_ok = to_integer(np.array([1.2, -3.1, 0.4]), budget.w_spec)
-    check("a query inside the declared ceiling is admitted",
-          not _raises(lambda: budget.assert_admissible(w_ok, 0)))
-    check("raising f_w after upload is refused",
-          _raises(lambda: budget.assert_admissible(w_ok, 4)))
-    check("weights past the declared clip are refused",
-          _raises(lambda: budget.assert_admissible(np.array([9, 1, 1]), 0)))
+    # The budget only sizes q; each query is then judged exactly by the server's gate
+    q = choose_field_size(B, warn_native=False).q
+    gate = lambda wq, f_w: all(
+        check_query(least_squares_gradient(25, 3, wq, f_w, j), q, 2,
+                    budget.x_spec.max_int).ok for j in range(3))
+
+    w_real = np.array([1.2, -3.1, 0.4])
+    w_ok = to_integer(w_real, budget.w_spec)
+    check("a query inside the declared ceiling passes the gate", gate(w_ok, 0))
+    check("raising f_w after upload is refused by the gate",
+          not gate(to_integer(w_real, FixedPointSpec(f=4, clip=4.0)), 4))
+    check("past the declared clip but within the window: accepted (gate is exact)",
+          gate(np.array([9, 1, 1]), 0))
+    check("past the declared clip and past the window: refused",
+          not gate(np.array([20, 1, 1]), 0))
 
     # The one-sidedness is what makes a ceiling workable: anything smaller must stay safe
     loose = QueryBudget(n_samples=25, n_features=3, d=2,
                         x_spec=FixedPointSpec(f=8, clip=4.0),
                         w_spec=FixedPointSpec(f=8, clip=4.0))
-    check("a looser ceiling costs field size but admits the tight query too",
-          loose.magnitude_bound() > B
-          and not _raises(lambda: loose.assert_admissible(w_ok, 0)))
+    check("a looser ceiling costs field size", loose.magnitude_bound() > B)
 
-    # Every admitted query must actually fit the window q was sized for
-    q = choose_field_size(B, warn_native=False).q
+    # Every query the gate admits must actually fit the window
     rng = np.random.default_rng(17)
-    fits = True
+    fits = admitted = True
     for _ in range(20):
         Xq = to_integer(rng.standard_t(2, size=(25, 3)), budget.x_spec)
         yq = to_integer(rng.standard_t(2, size=25), budget.x_spec)
         wq = to_integer(rng.standard_t(2, size=3), budget.w_spec)
-        budget.assert_admissible(wq, budget.w_spec.f)
+        admitted &= gate(wq, budget.w_spec.f)
+        codes = np.concatenate([Xq.ravel(), yq])
         for j in range(3):
-            g = int(sum((sum(int(Xq[i, k]) * int(wq[k]) for k in range(3))
-                         - 2 ** budget.w_spec.f * int(yq[i])) * int(Xq[i, j])
-                        for i in range(25)))
+            g = least_squares_gradient(25, 3, wq, budget.w_spec.f, j).evaluate_integers(codes)
             fits &= abs(g) <= (q - 1) // 2
-    check("20 admitted queries all land inside the balanced window", fits)
+    check("20 in-budget queries are all admitted and all land inside the window",
+          admitted and fits)
 
 
 def test_entropy_bounds_directions():
@@ -496,29 +510,16 @@ def test_quantized_gradient_decodes_exactly():
     ctx.H_p_X, ctx.max_H_p_X_R = entropy_bounds(n, ctx.r, q, x_spec)
     ctx.m = compute_required_m(ctx)
 
-    client, server = Client(ctx, GF), Server(ctx, GF)
-    G = generate_random_G(GF, ctx.m, n)
+    key_rng = np.random.default_rng(6)
+    client, server = Client(ctx, GF, rng=key_rng), Server(ctx, GF)
+    G = generate_random_G(GF, ctx.m, n, rng=key_rng)
     x_field = codes_to_field(GF, np.concatenate([Xq.ravel(), yq]), x_spec)
     server.store_data(client.encode_data(x_field, G), G)
 
-    iX = lambda i, k: i * n_features + k
-    iy = lambda i: n_samples * n_features + i
-    w_gf = [GF(int(v) % q) for v in wq]
-    two_fw = GF(2 ** f_w % q)
-
     exact = True
     for j in range(n_features):
-        def f(z, j=j):
-            acc = GF(0)
-            for i in range(n_samples):
-                residual = GF(0)
-                for k in range(n_features):
-                    residual = residual + z[iX(i, k)] * w_gf[k]
-                acc = acc + (residual - two_fw * z[iy(i)]) * z[iX(i, j)]
-            return acc
-
-        points, results = server.compute_request(f)
-        decoded = int(lift_balanced(client.decode_result(points, results), q))
+        f = least_squares_gradient(n_samples, n_features, wq, f_w, j)
+        decoded = int(lift_balanced(client.decode_result(server.compute_request(f)).value, q))
         oracle = int(sum((sum(int(Xq[i, k]) * int(wq[k]) for k in range(n_features))
                           - 2 ** f_w * int(yq[i])) * int(Xq[i, j])
                          for i in range(n_samples)))
@@ -526,6 +527,116 @@ def test_quantized_gradient_decodes_exactly():
 
     check(f"all {n_features} gradient components decode to the integer oracle "
           f"(m={ctx.m}, lambda={math.comb(ctx.m + 2, 2)})", exact)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. The server's overflow gate
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _raises_type(fn, exc) -> bool:
+    """
+    :param fn: Zero-argument callable
+    :param exc: Exception type expected
+    :return: True iff fn raises exc
+    """
+    try:
+        fn()
+    except exc:
+        return True
+    return False
+
+
+def test_overflow_gate():
+    print("\n11. The server refuses queries that may overflow, with a status")
+
+    # (a) Polynomial algebra: built from variables == written out as terms, merged and signed
+    v = variables(6)
+    built = 2 * v[0] ** 2 + v[1] * v[2] - v[2] * v[1] - 3 * v[4] + 5
+    explicit = Polynomial({(0, 0): 2, (4,): -3, (): 5})
+    check("variable arithmetic merges like terms and cancels to the explicit polynomial",
+          built == explicit, f"{built} vs {explicit}")
+    check("degree and variable count are read from the terms",
+          built.degree == 2 and built.num_variables == 5)
+    GF = galois.GF(31)
+    z = [3, -7, 11, 0, -2, 9]
+    check("field evaluation equals the integer oracle mod q",
+          int(built(GF([c % 31 for c in z]))) == built.evaluate_integers(z) % 31)
+    check("field-element coefficients are rejected (the bound needs signed integers)",
+          _raises_type(lambda: Polynomial({(0,): GF(30)}), TypeError))
+
+    # (b) The generic bound reproduces the hand-derived gradient bound exactly
+    agree = True
+    for n_s, P, f_X, f_w, A_x, A_w in [(25, 3, 7, 4, 4.0, 2.0), (4, 2, 8, 4, 4.0, 4.0),
+                                       (10, 5, 6, 0, 3.0, 1.0)]:
+        x_spec, w_spec = FixedPointSpec(f_X, A_x), FixedPointSpec(f_w, A_w)
+        hand = gradient_bound_worst_case(n_s, P, x_spec, w_spec)
+        for signs in (np.ones(P, dtype=int), (-1) ** np.arange(P)):
+            g = least_squares_gradient(n_s, P, signs * w_spec.max_int, f_w, 0)
+            agree &= g.worst_case_bound(x_spec.max_int) == hand
+    check("Polynomial.worst_case_bound == gradient_bound_worst_case at |w| = clip", agree)
+
+    # (c) The gate's decisions, from public quantities only
+    q = 1_000_003
+    W = (q - 1) // 2
+    check("degree > d is refused as DEGREE_TOO_HIGH",
+          check_query(v[0] * v[1] * v[2], q, 2, 10).status is QueryStatus.DEGREE_TOO_HIGH)
+    check("bound exactly at the window is accepted",
+          check_query(Polynomial({(0,): W}), q, 2, 1).ok)
+    check("bound one past the window is refused as MAY_OVERFLOW",
+          check_query(Polynomial({(0,): W + 1}), q, 2, 1).status is QueryStatus.MAY_OVERFLOW)
+    check("negative coefficients count by magnitude",
+          check_query(Polynomial({(0,): -(W + 1)}), q, 2, 1).status
+          is QueryStatus.MAY_OVERFLOW)
+    check("native F_q data (max_input None) has no overflow check",
+          check_query(Polynomial({(0,): W + 1}), q, 2, None).ok)
+
+    # (d) End to end at the edge of the window, on worst-case data
+    n_s, P, f_X, f_w = 4, 2, 8, 4
+    x_spec, w_spec = FixedPointSpec(f_X, 4.0), FixedPointSpec(f_w, 4.0)
+    Xq = to_integer(np.full((n_s, P), 4.0), x_spec)
+    yq = to_integer(np.full(n_s, -4.0), x_spec)       # every term adds with the same sign
+    wq = to_integer(np.full(P, 4.0), w_spec)
+    codes = np.concatenate([Xq.ravel(), yq])
+    B = gradient_bound_worst_case(n_s, P, x_spec, w_spec)
+    q = choose_prime(B, warn_native=False)
+    GF = galois.GF(q)
+    ctx = SystemContext(q=q, n=codes.size, d=2, r=1, p=2, max_input=x_spec.max_int)
+    ctx.m = 3  # privacy is not under test here; a small key keeps lambda tiny
+
+    rng = np.random.default_rng(0)
+    client, server = Client(ctx, GF, rng=rng), Server(ctx, GF)
+    G = generate_random_G(GF, ctx.m, ctx.n, rng=rng)
+    server.store_data(client.encode_data(codes_to_field(GF, codes, x_spec), G), G)
+
+    g = least_squares_gradient(n_s, P, wq, f_w, 0)
+    oracle = g.evaluate_integers(codes)
+    accepted = client.decode_result(server.compute_request(g))
+    check("worst-case data attains the bound, and the accepted query decodes exactly",
+          oracle == B and accepted.ok and int(lift_balanced(accepted.value, q)) == oracle,
+          f"oracle {oracle:,}, B {B:,}")
+
+    finer = least_squares_gradient(n_s, P, 2 * wq, f_w + 1, 0)   # one more bit of weight
+    response = server.compute_request(finer)
+    true_value = finer.evaluate_integers(codes)
+    would_be = int(lift_balanced(GF(true_value % q), q))
+    check("a query past the budget is refused, and workers return nothing",
+          response.status is QueryStatus.MAY_OVERFLOW and response.results is None)
+    check("...and the refusal was needed: unchecked, it would have decoded wrong",
+          would_be != true_value, f"true {true_value:,}, would decode {would_be:,}")
+
+    decoded = client.decode_results([server.compute_request(g), response])
+    check("a batch with one refused query decodes the other and passes the status through",
+          decoded[0].ok and int(lift_balanced(decoded[0].value, q)) == oracle
+          and decoded[1].status is QueryStatus.MAY_OVERFLOW and decoded[1].value is None
+          and "exceeds the window" in decoded[1].reason)
+
+    # (e) The assumption the gate rests on is enforced at upload
+    bad = codes.copy()
+    bad[0] = x_spec.max_int + 1
+    check("upload rejects a code outside the declared max_input",
+          _raises_type(lambda: client.encode_data(GF(bad % q), G), ValueError))
+    check("the server rejects an opaque callable query",
+          _raises_type(lambda: server.compute_request(lambda z: z[0]), TypeError))
 
 
 def main():
@@ -544,6 +655,7 @@ def main():
     test_query_budget_ordering()
     test_entropy_bounds_directions()
     test_quantized_gradient_decodes_exactly()
+    test_overflow_gate()
 
     elapsed = time.perf_counter() - t0
     print("\n" + "=" * 72)

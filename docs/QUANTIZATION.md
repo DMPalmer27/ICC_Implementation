@@ -413,10 +413,16 @@ future step is permitted to use.
 **The constraint is one-sided, which is what makes it workable.** A later query with smaller
 `f_w` or smaller weights produces a smaller integer and stays safely inside the window, so
 the budget only has to be an upper bound — it does not have to be tight.
-`budget.assert_admissible(ŵ, f_w)` polices it, checking `f_w ≤` declared and
-`max|ŵ| ≤` declared. Both conditions together re-establish the magnitude bound. The check is
-cheap and uses only public quantities, so the client runs it *before sending* — which is the
-only time it can, since after upload it cannot detect a violation (§3's R3).
+The budget is used only to size `q`. Each query is then policed exactly, per query, by the
+server's pre-dispatch gate (`query.check_query`): with `max_input = X̂max` declared, it
+computes `B(f) = Σ |c_a| · X̂max^deg(a)` from the query's own signed integer coefficients and
+refuses with a status (`MAY_OVERFLOW`, or `DEGREE_TOO_HIGH` for `deg f > d`) if
+`B(f) > (q−1)/2`, before any worker runs. It uses only public quantities, so a refusal leaks
+nothing, and it replaces client-side detection, which is impossible after upload (§3's R3).
+Every query inside the budget passes, since `B(g) = n_s·X̂max²·(Σ|ŵ_k| + 2^{f_w}) ≤ B`; a query
+outside the declared ceiling whose own bound still fits passes too. An earlier per-query
+budget check (`f_w ≤` declared and `max|ŵ| ≤` declared) was strictly more conservative and was
+removed as redundant.
 
 ### 6.1 Where `w_spec` comes from, given that `w` does not exist yet
 

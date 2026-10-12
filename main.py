@@ -16,8 +16,13 @@ import numpy as np
 from config import SystemContext
 from client import Client
 from server import Server
+from query import variables
 from utils import compute_p_entropy, compute_max_subset_p_entropy, compute_required_m, \
     compute_leakage_bound, generate_random_G
+
+# Seeds the data, G and the key, so the printed diagnostics are reproducible. A real client
+# must NOT seed its key: the privacy guarantee assumes k ~ Unif(F_q^m).
+SEED = 0
 
 
 def main():
@@ -33,7 +38,7 @@ def main():
     probs[:num_weighted] = 0.9 / num_weighted # Give first num_weighted values 90% of the mass
     probs[num_weighted:] = 0.1 / (context.q - num_weighted) # Give remaining values remaining 10% of the mass
 
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(SEED)
     samples = rng.choice(context.q, size=context.n, p=probs)
     x = GF(samples)
 
@@ -52,10 +57,10 @@ def main():
     print(f"Theoretical leakage ε_c    = {eps_c:.6f}  (per r-subset)")
     print(f"Key size m set to          = {context.m}")
 
-    client = Client(context, GF)
+    client = Client(context, GF, rng=rng)
     server = Server(context, GF)
 
-    G = generate_random_G(GF, context.m, context.n)
+    G = generate_random_G(GF, context.m, context.n, rng=rng)
 
     # Storage Phase
     print("--- Storage Phase ---")
@@ -73,17 +78,18 @@ def main():
 
 
     # Random polynomial that I chose to use for this toy example
-    def target_polynomial(data):
-        x1, x2, x3, = data[0], data[1], data[2]
-        return (x1 ** 2) + (x2 * x3)
+    v = variables(context.n)
+    target_polynomial = v[0] ** 2 + v[1] * v[2]
 
-    points, results = server.compute_request(target_polynomial)
-    # print(f"Server evaluated at points (RM information set): {points}")
-    # print(f"Server obtained results: {results}")
+    response = server.compute_request(target_polynomial)
 
     # Decoding Phase
     print("\n--- Decoding Phase ---")
-    final_answer = client.decode_result(points, results)
+    decoded = client.decode_result(response)
+    if not decoded.ok:
+        print(f"Server refused the query ({decoded.status.value}): {decoded.reason}")
+        return
+    final_answer = decoded.value
 
     expected = target_polynomial(x)
     print(f"Client decoded answer: {final_answer}")

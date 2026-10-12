@@ -7,8 +7,8 @@ polynomial to the workers to calculate, and returns aggregated result from worke
 
 import numpy as np
 import galois
-from typing import Callable, List
 from config import SystemContext
+from query import Polynomial, QueryResult, QueryStatus, check_query
 from worker import Worker
 from utils import get_information_set
 from typing import Type
@@ -62,14 +62,32 @@ class Server:
         # Wrap in GF because server requires finite field arithmetic
         return [self.GF(list(combo)) for combo in base_points]
 
-    def compute_request(self, f: Callable) -> tuple[List, List]:
+    def compute_request(self, f: Polynomial) -> QueryResult:
         """
         This is the function that the user calls when they want to calculate a polynomial over their data.
 
-        :param f: The polynomial the user wants computed
-        :return: The points that the server evaluated the polynomial at and the results for those points. The user
-        uses these results to extract the polynomial that, when evaluated at the secret key, gives their desired
-        computation.
+        The query is checked BEFORE any worker is contacted (query.check_query): a query whose
+        degree exceeds d, or whose worst case over the declared input range could leave the
+        balanced window of F_q, is refused with a status and reason instead of returning a
+        result that may silently be wrong. The check uses only f's coefficients and public
+        parameters, so a refusal leaks nothing about the data.
+
+        :param f: The polynomial the user wants computed, with explicit integer coefficients
+        :return: QueryResult; when ok, it holds the points the server evaluated at and the results for those
+        points, which the user interpolates to recover the polynomial whose value at the secret key is the
+        desired computation
         """
+        if not isinstance(f, Polynomial):
+            raise TypeError("queries must be query.Polynomial objects; an opaque callable "
+                            "cannot be checked for overflow or degree")
+        if f.num_variables > self.context.n:
+            raise ValueError(f"query uses x{f.num_variables - 1} but the data has length "
+                             f"{self.context.n}")
+
+        check = check_query(f, self.context.q, self.context.d, self.context.max_input)
+        if not check.ok:
+            return check
+
         results = [worker.evaluate(f) for worker in self.workers]
-        return self.points, results
+        return QueryResult(QueryStatus.OK, points=self.points, results=results,
+                           bound=check.bound, window=check.window)

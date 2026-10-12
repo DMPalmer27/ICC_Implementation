@@ -9,6 +9,7 @@ import itertools
 import galois
 import math
 import numpy as np
+from typing import Optional, Union
 from config import SystemContext
 
 
@@ -41,17 +42,22 @@ def generate_vandermonde_G(GF: type[galois.FieldArray], m: int, n: int) -> galoi
 
     return G
 
-def generate_random_G(GF: type[galois.FieldArray], m: int, n: int) -> galois.FieldArray:
+def generate_random_G(GF: type[galois.FieldArray], m: int, n: int,
+                      rng: Optional[Union[int, np.random.Generator]] = None) -> galois.FieldArray:
     """
     Generate a generator matrix for a random linear code. With sufficent size of m (given by Theorem 1 bound) this
     will successfully smooth with high probability.
 
+    Pass rng to make a run reproducible. np.random.seed does NOT reach this: galois draws from
+    its own Generator, seeded only through the seed argument of GF.Random.
+
     :param GF: Galois field object
     :param m: Number of rows which is the key length, must satisfy Theorem 1 bound
     :param n: Number of columns which is the data length
+    :param rng: Seed or Generator for the draw; None draws fresh OS entropy
     :return: GF array of shape (m,n) with uniform random entries from GF
     """
-    return GF.Random((m,n))
+    return GF.Random((m,n), seed=rng)
 
 def compute_symbol_p_entropy(x, q: int, p: int) -> float:
     """

@@ -5,8 +5,8 @@ Description: This file contains general the class for the worker node within the
 polynomial computation on its share of the encoded data
 """
 
-from typing import Callable, Type
 import galois
+from query import Polynomial
 
 class Worker:
 
@@ -18,11 +18,11 @@ class Worker:
         """
         self.data = data
 
-    def evaluate(self, f: Callable):
+    def evaluate(self, f: Polynomial):
         """
         Function to evaluate a polynomial at the worker's share of data
 
-        :param f: Polynomial that is being evaluated
+        :param f: Polynomial that is being evaluated; already checked by the server
         :return: Polynomial's evaluation at the workers share of data
         """
         return f(self.data)

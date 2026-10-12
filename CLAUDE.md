@@ -37,8 +37,9 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | File | Role |
 |---|---|
 | `icc/config.py` | `SystemContext` dataclass — all scheme parameters in one place |
-| `icc/client.py` | `Client.encode_data` (storage), `Client.decode_result` (interpolate `g`, evaluate at `k`); caches the interpolation matrix `M` |
-| `icc/server.py` | `Server` = the admin: shards `x̃` to workers, aggregates results |
+| `icc/client.py` | `Client.encode_data` (storage; enforces `|x̂| ≤ max_input`), `Client.decode_result(s)` (interpolate `g`, evaluate at `k`, pass refusals through as a status); caches the interpolation matrix `M` |
+| `icc/server.py` | `Server` = the admin: shards `x̃` to workers, refuses unsafe queries, aggregates results |
+| `icc/query.py` | `Polynomial` (explicit signed-integer coefficients), `least_squares_gradient`, and the public pre-dispatch gate `check_query`: refuses `deg > d` and any query with `Σ|c|·max_input^deg > (q−1)/2`, returning a `QueryStatus` instead of a possibly-wrapped value |
 | `icc/worker.py` | `Worker` — deliberately trivial, just `f(its share)` |
 | `icc/utils.py` | `G` generation, entropy, Theorem 1 `m` bound, leakage bound, `build_monomial_matrix`, information (super)set enumeration |
 | `icc/quantize.py` | Fixed-point map reals ↔ `F_q`, balanced lift, hard no-wraparound bounds, field-size choice, rigorous entropy bounds for quantised data |
@@ -160,3 +161,5 @@ per-symbol vs vector entropy scaling, the two entropy paths disagreeing, the mis
   numbers in comments, as the current code does.
 - This is thesis work that gets written up in LaTeX. Numerical results that land in
   tables need to be reproducible: prefer seeded runs and save raw output.
+  `np.random.seed` does **not** reach `galois` (`GF.Random` takes its own `seed=`), so pass
+  an explicit `rng` to `generate_random_G` and `Client` — never seed a real client's key.

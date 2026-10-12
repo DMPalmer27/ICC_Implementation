@@ -67,6 +67,7 @@ from quantize import (
     symbol_entropy_lower_bits,
     to_integer,
 )
+from query import check_query, least_squares_gradient
 from server import Server
 from utils import compute_leakage_bound, compute_required_m, generate_random_G
 
@@ -350,44 +351,6 @@ def study_residue_entropy():
 # Study D -- end to end through the real scheme
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _gradient_polynomial(GF, n_samples: int, n_features: int, w_codes, f_w: int, j: int):
-    """
-    Builds the degree-2 query polynomial for gradient component j.
-
-    g_j(z) = sum_i ( sum_k z[X(i,k)] * wq[k]  -  2^{f_w} * z[y(i)] ) * z[X(i,j)]
-
-    The weights appear as public COEFFICIENTS, not as data: the workers' shares are written
-    once at storage time and never change across the training run, so a gradient step costs
-    a fresh polynomial and nothing else. The 2^{f_w} multiplier on the label term is what
-    aligns the two terms at the common scale 2^{2 f_X + f_w} without making the stored
-    quantisation of y depend on the weight precision.
-
-    :param GF: Galois field object
-    :param n_samples: Number of samples
-    :param n_features: Number of features
-    :param w_codes: Quantised weight vector, integer codes
-    :param f_w: Fractional bits of the weights
-    :param j: Gradient component to build
-    :return: Callable taking a worker's share and returning a field element
-    """
-    iX = lambda i, k: i * n_features + k
-    iy = lambda i: n_samples * n_features + i
-    w_gf = [GF(int(v) % GF.order) for v in w_codes]
-    two_fw = GF(2 ** f_w % GF.order)
-
-    def f(z):
-        acc = GF(0)
-        for i in range(n_samples):
-            residual = GF(0)
-            for k in range(n_features):
-                residual = residual + z[iX(i, k)] * w_gf[k]
-            residual = residual - two_fw * z[iy(i)]
-            acc = acc + residual * z[iX(i, j)]
-        return acc
-
-    return f
-
-
 def study_end_to_end(n_samples: int = 4, n_features: int = 2, f_X: int = 8, f_w: int = 4):
     """
     Runs the full scheme on quantised data and checks the decoded gradient three ways.
@@ -423,7 +386,8 @@ def study_end_to_end(n_samples: int = 4, n_features: int = 2, f_X: int = 8, f_w:
     B = budget.magnitude_bound()
     q = choose_prime(B)
     GF = galois.GF(q)
-    ctx = SystemContext(q=q, n=n, d=2, r=3, p=P_ORDER, epsilon=1e-4)
+    ctx = SystemContext(q=q, n=n, d=2, r=3, p=P_ORDER, epsilon=1e-4,
+                        max_input=x_spec.max_int)
     ctx.H_p_X, ctx.max_H_p_X_R = entropy_bounds(n, ctx.r, q, x_spec)
     ctx.m = compute_required_m(ctx)
     lam = math.comb(ctx.m + ctx.d, ctx.d)
@@ -437,13 +401,12 @@ def study_end_to_end(n_samples: int = 4, n_features: int = 2, f_X: int = 8, f_w:
 
     # Storage: the data vector is the flattened feature matrix followed by the labels
     x_field = codes_to_field(GF, np.concatenate([Xq.ravel(), yq]), x_spec)
-    client, server = Client(ctx, GF), Server(ctx, GF)
-    G = generate_random_G(GF, ctx.m, n)
+    client, server = Client(ctx, GF, rng=rng), Server(ctx, GF)
+    G = generate_random_G(GF, ctx.m, n, rng=rng)
     server.store_data(client.encode_data(x_field, G), G)
 
-    # Police the query against the declared budget before sending it -- the only point at
-    # which the client can, since after upload it cannot detect a wrap.
-    budget.assert_admissible(wq, f_w)
+    # Every query below passes the server's overflow gate (query.check_query) before any
+    # worker runs: the context declares max_input, so a query that could wrap is refused.
 
     scale = 2.0 ** (2 * f_X + f_w)
     g_float = (X @ w - y) @ X
@@ -459,9 +422,9 @@ def study_end_to_end(n_samples: int = 4, n_features: int = 2, f_X: int = 8, f_w:
 
     all_exact = True
     for j in range(n_features):
-        points, results = server.compute_request(
-            _gradient_polynomial(GF, n_samples, n_features, wq, f_w, j))
-        decoded = int(lift_balanced(client.decode_result(points, results), q))
+        response = server.compute_request(
+            least_squares_gradient(n_samples, n_features, wq, f_w, j))
+        decoded = int(lift_balanced(client.decode_result(response).value, q))
 
         oracle = int(sum(
             (sum(int(Xq[i, k]) * int(wq[k]) for k in range(n_features))
@@ -527,10 +490,13 @@ def study_weight_precision(n_samples: int = 25, n_features: int = 3, f_X: int = 
     for f_w in (0, 2, 4, 6, 8):
         w_spec = FixedPointSpec(f=f_w, clip=clip_w)
         budget = QueryBudget(n_samples, n_features, 2, x_spec, w_spec)
+        q = choose_prime(budget.magnitude_bound(), warn_native=False)
         w, peak, scale = np.zeros(n_features), 0.0, 2.0 ** (2 * f_X + f_w)
         for _ in range(steps):
             wq = to_integer(w, w_spec)
-            budget.assert_admissible(wq, f_w)
+            # The gate the server would apply to each component of this step's query
+            assert all(check_query(least_squares_gradient(n_samples, n_features, wq, f_w, j),
+                                   q, 2, x_spec.max_int).ok for j in range(n_features))
             g = np.array([sum((sum(int(Xq[i, k]) * int(wq[k]) for k in range(n_features))
                                - 2 ** f_w * int(yq[i])) * int(Xq[i, j])
                               for i in range(n_samples))
@@ -551,7 +517,7 @@ def study_weight_precision(n_samples: int = 25, n_features: int = 3, f_X: int = 
     print("  is the operating point. Cost of insisting on it: 306 extra workers versus the")
     print("  h-optimal f_w = 0 (lambda 3,081 vs 2,775) -- the honest price of a usable model.")
     print(f"\n  peak |w_t| = {peak:.2f} against the declared A_w = {clip_w:.0f}: every query")
-    print("  was admitted by the budget, with headroom. A_w is a PRE-COMMITMENT, not a")
+    print("  passed the server's overflow gate, with headroom. A_w is a PRE-COMMITMENT, not a")
     print("  measurement -- justified a priori by |w*| <= 1/lambda_min(correlation matrix),")
     print("  so A_w = 2 covers any design with lambda_min >= 1/2. Do not read A_w off the")
     print("  data: that is the same leak as reading B off the data (section 7.1).")
