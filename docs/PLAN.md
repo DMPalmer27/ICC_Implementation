@@ -285,6 +285,14 @@ feasibility model being trustworthy. Right now neither holds.
   - [ ] Measure real-data entropy: per-feature `h_i`, and how far from i.i.d. the
         coordinates actually are. This feeds Open Question 1.
 
+> **Change of direction (2026-10-12).** This week is a
+> parameter-feasibility sweep instead of the regression run: does the massive `q` that
+> quantising reals needs make encode/evaluate/decode infeasible? Tooling and findings in
+> `docs/Q_SWEEP.md` (`tools/q_sweep.py`, `tools/plot_sweep.py`). It also found that CRT gives
+> no entropy advantage once the encodings are sized jointly, which undercuts the Week 8 table
+> below (see `docs/Q_SWEEP.md` §6). Training remains live: the client sends each gradient
+> query based on the previous result.
+
 ### Weeks 5–6 · Linear regression under the scheme
 
 - **W5** — One GD step, end to end. Encode `(X, y)`, query the gradient, decode, compare

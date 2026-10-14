@@ -1,0 +1,211 @@
+T: 849 analytic rows
+D: 14 cells, 1 at a time, cap 120s
+  log2q=  13.0 m=   - lam=     - L=1 ok               construct 0.47s
+  log2q=  20.0 m=   - lam=     - L=1 ok               construct 2.56s
+  log2q=  25.0 m=   - lam=     - L=1 ok               construct 0.37s
+  log2q=  30.0 m=   - lam=     - L=1 ok               construct 0.39s
+  log2q=  31.5 m=   - lam=     - L=1 ok               construct 0.40s
+  log2q=  32.0 m=   - lam=     - L=1 ok               construct 0.00s
+  log2q=  40.0 m=   - lam=     - L=1 ok               construct 0.01s
+  log2q=  48.0 m=   - lam=     - L=1 ok               construct 0.04s
+  log2q=  61.0 m=   - lam=     - L=1 ok               construct 0.02s
+  log2q=  64.0 m=   - lam=     - L=1 ok               construct 0.04s
+  log2q=  89.0 m=   - lam=     - L=1 ok               construct 0.17s
+  log2q= 127.0 m=   - lam=     - L=1 ok               construct 1.21s
+  log2q= 256.0 m=   - lam=     - L=1 ok               construct 105.71s
+  log2q=   nan m=   - lam=     - L=1 error            
+D: done in 191s; 1 wrong/error cells
+    error []
+A: 28 cells, 1 at a time, cap 1800s
+  log2q=  13.0 m=  20 lam=   231 L=1 ok               step 0.06s setup 0.49s
+  log2q=  20.0 m=  20 lam=   231 L=1 ok               step 0.06s setup 2.57s
+  log2q=  25.0 m=  20 lam=   231 L=1 ok               step 0.05s setup 0.39s
+  log2q=  30.0 m=  20 lam=   231 L=1 ok               step 0.07s setup 0.44s
+  log2q=  31.5 m=  20 lam=   231 L=1 ok               step 0.05s setup 0.48s
+  log2q=  32.0 m=  20 lam=   231 L=1 ok               step 0.12s setup 0.10s
+  log2q=  40.0 m=  20 lam=   231 L=1 ok               step 0.11s setup 0.10s
+  log2q=  48.0 m=  20 lam=   231 L=1 ok               step 0.11s setup 0.10s
+  log2q=  61.0 m=  20 lam=   231 L=1 ok               step 0.12s setup 0.08s
+  log2q=  64.0 m=  20 lam=   231 L=1 ok               step 0.12s setup 0.09s
+  log2q=  89.0 m=  20 lam=   231 L=1 ok               step 0.11s setup 0.10s
+  log2q= 127.0 m=  20 lam=   231 L=1 ok               step 0.14s setup 0.10s
+  log2q= 256.0 m=  20 lam=   231 L=1 ok               step 0.16s setup 0.09s
+  log2q= 521.0 m=  20 lam=   231 L=1 ok               step 0.28s setup 0.10s
+  log2q=  13.0 m=  48 lam=  1225 L=1 ok               step 0.30s setup 0.61s
+  log2q=  20.0 m=  48 lam=  1225 L=1 ok               step 0.32s setup 2.79s
+  log2q=  25.0 m=  48 lam=  1225 L=1 ok               step 0.38s setup 0.58s
+  log2q=  30.0 m=  48 lam=  1225 L=1 ok               step 0.36s setup 0.70s
+  log2q=  31.5 m=  48 lam=  1225 L=1 ok               step 0.40s setup 0.73s
+  log2q=  32.0 m=  48 lam=  1225 L=1 ok               step 1.73s setup 4.82s
+  log2q=  40.0 m=  48 lam=  1225 L=1 ok               step 1.75s setup 4.66s
+  log2q=  48.0 m=  48 lam=  1225 L=1 ok               step 1.79s setup 4.77s
+  log2q=  61.0 m=  48 lam=  1225 L=1 ok               step 1.79s setup 4.81s
+  log2q=  64.0 m=  48 lam=  1225 L=1 ok               step 1.74s setup 4.65s
+  log2q=  89.0 m=  48 lam=  1225 L=1 ok               step 1.77s setup 4.64s
+  log2q= 127.0 m=  48 lam=  1225 L=1 ok               step 1.82s setup 4.79s
+  log2q= 256.0 m=  48 lam=  1225 L=1 ok               step 2.06s setup 4.87s
+  log2q= 521.0 m=  48 lam=  1225 L=1 ok               step 2.75s setup 4.80s
+A: done in 150s; 0 wrong/error cells
+B: 30 cells, 1 at a time, cap 1800s
+  log2q=  30.0 m=  10 lam=    66 L=1 ok               step 0.01s setup 0.40s
+  log2q=  30.0 m=  20 lam=   231 L=1 ok               step 0.05s setup 0.42s
+  log2q=  30.0 m=  30 lam=   496 L=1 ok               step 0.12s setup 0.44s
+  log2q=  30.0 m=  40 lam=   861 L=1 ok               step 0.24s setup 0.56s
+  log2q=  30.0 m=  50 lam=  1326 L=1 ok               step 0.42s setup 0.73s
+  log2q=  30.0 m=  60 lam=  1891 L=1 ok               step 0.70s setup 1.23s
+  log2q=  30.0 m=  70 lam=  2556 L=1 ok               step 1.21s setup 2.31s
+  log2q=  30.0 m=  80 lam=  3321 L=1 ok               step 1.84s setup 4.31s
+  log2q=  30.0 m=  90 lam=  4186 L=1 ok               step 2.84s setup 9.29s
+  log2q=  30.0 m= 100 lam=  5151 L=1 ok               step 4.06s setup 14.45s
+  log2q=  61.0 m=  10 lam=    66 L=1 ok               step 0.02s setup 0.01s
+  log2q=  61.0 m=  20 lam=   231 L=1 ok               step 0.12s setup 0.10s
+  log2q=  61.0 m=  30 lam=   496 L=1 ok               step 0.42s setup 0.52s
+  log2q=  61.0 m=  40 lam=   861 L=1 ok               step 0.97s setup 2.05s
+  log2q=  61.0 m=  50 lam=  1326 L=1 ok               step 2.07s setup 5.84s
+  log2q=  61.0 m=  60 lam=  1891 L=1 ok               step 3.81s setup 13.90s
+  log2q=  61.0 m=  70 lam=  2556 L=1 ok               step 6.92s setup 29.35s
+  log2q=  61.0 m=  80 lam=  3321 L=1 ok               step 11.10s setup 57.34s
+  log2q=  61.0 m=  90 lam=  4186 L=1 ok               step 18.05s setup 110.10s
+  log2q=  61.0 m= 100 lam=  5151 L=1 ok               step 26.59s setup 195.46s
+  log2q= 127.0 m=  10 lam=    66 L=1 ok               step 0.03s setup 0.01s
+  log2q= 127.0 m=  20 lam=   231 L=1 ok               step 0.13s setup 0.10s
+  log2q= 127.0 m=  30 lam=   496 L=1 ok               step 0.42s setup 0.53s
+  log2q= 127.0 m=  40 lam=   861 L=1 ok               step 0.98s setup 2.03s
+  log2q= 127.0 m=  50 lam=  1326 L=1 ok               step 2.09s setup 5.69s
+  log2q= 127.0 m=  60 lam=  1891 L=1 ok               step 3.88s setup 14.02s
+  log2q= 127.0 m=  70 lam=  2556 L=1 ok               step 7.05s setup 29.34s
+  log2q= 127.0 m=  80 lam=  3321 L=1 ok               step 11.23s setup 56.89s
+  log2q= 127.0 m=  90 lam=  4186 L=1 ok               step 17.81s setup 117.59s
+  log2q= 127.0 m= 100 lam=  5151 L=1 ok               step 40.95s setup 226.46s
+B: done in 1443s; 0 wrong/error cells
+C: 51 cells, 1 at a time, cap 1200s
+  log2q=  23.1 m=  36 lam=   703 L=1 ok               step 0.14s setup 0.50s
+  log2q=  27.1 m=  37 lam=   741 L=1 ok               step 0.17s setup 0.45s
+  log2q=  29.1 m=  33 lam=   595 L=1 ok               step 0.15s setup 0.46s
+  log2q=  33.1 m=  35 lam=   666 L=1 ok               step 1.41s setup 1.60s
+  log2q=  63.0 m=  38 lam=   780 L=2 ok               step 0.42s setup 1.12s
+  log2q=  35.1 m=  32 lam=   561 L=1 ok               step 0.42s setup 0.71s
+  log2q=  63.0 m=  37 lam=   741 L=2 ok               step 0.37s setup 0.84s
+  log2q=  39.1 m=  33 lam=   595 L=1 ok               step 0.44s setup 0.77s
+  log2q=  63.0 m=  37 lam=   741 L=2 ok               step 0.37s setup 0.87s
+  log2q=  41.1 m=  31 lam=   528 L=1 ok               step 0.39s setup 0.61s
+  log2q=  63.0 m=  35 lam=   666 L=2 ok               step 0.36s setup 0.85s
+  log2q=  45.1 m=  32 lam=   561 L=1 ok               step 0.41s setup 0.69s
+  log2q=  63.0 m=  35 lam=   666 L=2 ok               step 0.34s setup 1.06s
+  log2q=  47.1 m=  30 lam=   496 L=1 ok               step 0.33s setup 0.50s
+  log2q=  63.0 m=  33 lam=   595 L=2 ok               step 0.29s setup 0.85s
+  log2q=  51.1 m=  31 lam=   528 L=1 ok               step 0.37s setup 0.60s
+  log2q=  63.0 m=  33 lam=   595 L=2 ok               step 0.29s setup 0.82s
+  log2q=  24.5 m=  83 lam=  3570 L=1 ok               step 1.29s setup 4.82s
+  log2q=  28.5 m=  86 lam=  3828 L=1 ok               step 2.29s setup 7.44s
+  log2q=  30.5 m=  77 lam=  3081 L=1 ok               step 1.64s setup 3.66s
+  log2q=  34.5 m=  80 lam=  3321 L=1 ok               step 11.19s setup 57.43s
+  log2q=  63.0 m=  90 lam=  4186 L=2 ok               step 5.82s setup 20.22s
+=== restart of T and C after equal-size CRT primes fix ===
+T: 849 analytic rows
+C: 51 cells, 1 at a time, cap 1200s
+  log2q=  23.1 m=  36 lam=   703 L=1 ok               step 0.15s setup 0.48s
+  log2q=  27.1 m=  37 lam=   741 L=1 ok               step 0.19s setup 0.48s
+  log2q=  29.1 m=  33 lam=   595 L=1 ok               step 0.14s setup 0.45s
+  log2q=  33.1 m=  35 lam=   666 L=1 ok               step 0.55s setup 1.01s
+  log2q=  33.1 m=  35 lam=   666 L=2 ok               step 0.29s setup 1.26s
+  log2q=  35.1 m=  32 lam=   561 L=1 ok               step 0.40s setup 0.67s
+  log2q=  35.1 m=  32 lam=   561 L=2 ok               step 0.24s setup 1.50s
+  log2q=  39.1 m=  33 lam=   595 L=1 ok               step 0.44s setup 0.76s
+  log2q=  39.1 m=  33 lam=   595 L=2 ok               step 0.28s setup 3.87s
+  log2q=  41.1 m=  31 lam=   528 L=1 ok               step 0.36s setup 0.60s
+  log2q=  41.1 m=  31 lam=   528 L=2 ok               step 0.20s setup 0.78s
+  log2q=  45.1 m=  32 lam=   561 L=1 ok               step 0.40s setup 0.66s
+  log2q=  45.1 m=  32 lam=   561 L=2 ok               step 0.22s setup 0.74s
+  log2q=  47.1 m=  30 lam=   496 L=1 ok               step 0.32s setup 0.49s
+  log2q=  47.1 m=  30 lam=   496 L=2 ok               step 0.19s setup 0.73s
+  log2q=  51.1 m=  31 lam=   528 L=1 ok               step 0.37s setup 0.59s
+  log2q=  51.1 m=  31 lam=   528 L=2 ok               step 0.21s setup 0.74s
+  log2q=  24.5 m=  83 lam=  3570 L=1 ok               step 1.31s setup 4.74s
+  log2q=  28.5 m=  86 lam=  3828 L=1 ok               step 2.32s setup 7.11s
+  log2q=  30.5 m=  77 lam=  3081 L=1 ok               step 1.62s setup 3.53s
+  log2q=  34.5 m=  80 lam=  3321 L=1 ok               step 10.82s setup 56.97s
+=== 2026-10-13 14:34:53 resume: rerun B at 2^127 (lid-close sleep 14:14-14:26), then C; caffeinate; per-cell power + sleep tracking ===
+B: 10 of 30 cells to run, 1 at a time, cap 1800s
+  log2q= 127.0 m=  10 lam=    66 L=1 ok               step 0.03s setup 0.01s
+  log2q= 127.0 m=  20 lam=   231 L=1 ok               step 0.12s setup 0.10s
+  log2q= 127.0 m=  30 lam=   496 L=1 ok               step 0.39s setup 0.52s
+  log2q= 127.0 m=  40 lam=   861 L=1 ok               step 0.98s setup 1.95s
+  log2q= 127.0 m=  50 lam=  1326 L=1 ok               step 2.09s setup 5.58s
+  log2q= 127.0 m=  60 lam=  1891 L=1 ok               step 3.79s setup 13.65s
+  log2q= 127.0 m=  70 lam=  2556 L=1 ok               step 6.70s setup 28.44s
+  log2q= 127.0 m=  80 lam=  3321 L=1 ok               step 11.55s setup 56.91s
+  log2q= 127.0 m=  90 lam=  4186 L=1 ok               step 17.44s setup 114.93s
+  log2q= 127.0 m= 100 lam=  5151 L=1 ok               step 26.62s setup 181.69s
+B: done in 672s; 0 wrong/error/slept cells
+C: 51 of 51 cells to run, 1 at a time, cap 1200s
+  log2q=  23.1 m=  36 lam=   703 L=1 ok               step 0.14s setup 0.50s
+  log2q=  27.1 m=  37 lam=   741 L=1 ok               step 0.21s setup 0.49s
+  log2q=  29.1 m=  33 lam=   595 L=1 ok               step 0.14s setup 0.45s
+  log2q=  33.1 m=  35 lam=   666 L=1 ok               step 0.57s setup 1.03s
+  log2q=  33.1 m=  35 lam=   666 L=2 ok               step 0.33s setup 1.32s
+  log2q=  35.1 m=  32 lam=   561 L=1 ok               step 0.42s setup 0.67s
+  log2q=  35.1 m=  32 lam=   561 L=2 ok               step 0.25s setup 1.55s
+  log2q=  39.1 m=  33 lam=   595 L=1 ok               step 0.45s setup 0.79s
+  log2q=  39.1 m=  33 lam=   595 L=2 ok               step 0.26s setup 3.87s
+  log2q=  41.1 m=  31 lam=   528 L=1 ok               step 0.39s setup 0.57s
+  log2q=  41.1 m=  31 lam=   528 L=2 ok               step 0.20s setup 0.77s
+  log2q=  45.1 m=  32 lam=   561 L=1 ok               step 0.41s setup 0.69s
+=== 2026-10-13 18:28:44 experiment C, fresh run on AC power (battery-measured partial run discarded) ===
+C: 51 of 51 cells to run, 1 at a time, cap 1200s
+  log2q=  23.1 m=  36 lam=   703 L=1 ok               step 0.15s setup 0.63s
+  log2q=  27.1 m=  37 lam=   741 L=1 ok               step 0.18s setup 0.49s
+  log2q=  29.1 m=  33 lam=   595 L=1 ok               step 0.14s setup 0.48s
+  log2q=  33.1 m=  35 lam=   666 L=1 ok               step 0.55s setup 1.03s
+  log2q=  33.1 m=  35 lam=   666 L=2 ok               step 0.30s setup 1.29s
+  log2q=  35.1 m=  32 lam=   561 L=1 ok               step 0.42s setup 0.66s
+  log2q=  35.1 m=  32 lam=   561 L=2 ok               step 0.24s setup 1.48s
+  log2q=  39.1 m=  33 lam=   595 L=1 ok               step 0.44s setup 0.80s
+  log2q=  39.1 m=  33 lam=   595 L=2 ok               step 0.26s setup 3.80s
+  log2q=  41.1 m=  31 lam=   528 L=1 ok               step 0.36s setup 0.58s
+  log2q=  41.1 m=  31 lam=   528 L=2 ok               step 0.20s setup 0.74s
+  log2q=  45.1 m=  32 lam=   561 L=1 ok               step 0.45s setup 0.66s
+  log2q=  45.1 m=  32 lam=   561 L=2 ok               step 0.24s setup 0.81s
+  log2q=  47.1 m=  30 lam=   496 L=1 ok               step 0.33s setup 0.53s
+  log2q=  47.1 m=  30 lam=   496 L=2 ok               step 0.20s setup 0.72s
+  log2q=  51.1 m=  31 lam=   528 L=1 ok               step 0.36s setup 0.57s
+  log2q=  51.1 m=  31 lam=   528 L=2 ok               step 0.21s setup 0.75s
+  log2q=  24.5 m=  83 lam=  3570 L=1 ok               step 1.33s setup 4.81s
+  log2q=  28.5 m=  86 lam=  3828 L=1 ok               step 2.23s setup 7.33s
+  log2q=  30.5 m=  77 lam=  3081 L=1 ok               step 1.71s setup 3.40s
+  log2q=  34.5 m=  80 lam=  3321 L=1 ok               step 11.68s setup 57.11s
+  log2q=  34.5 m=  80 lam=  3321 L=2 ok               step 2.54s setup 8.72s
+  log2q=  36.5 m=  74 lam=  2850 L=1 ok               step 8.51s setup 38.51s
+  log2q=  36.5 m=  74 lam=  2850 L=2 ok               step 2.35s setup 6.45s
+  log2q=  40.5 m=  77 lam=  3081 L=1 ok               step 9.63s setup 47.75s
+  log2q=  40.5 m=  77 lam=  3081 L=2 ok               step 2.14s setup 6.40s
+  log2q=  42.5 m=  71 lam=  2628 L=1 ok               step 7.05s setup 31.76s
+  log2q=  42.5 m=  71 lam=  2628 L=2 ok               step 1.64s setup 4.42s
+  log2q=  46.5 m=  74 lam=  2850 L=1 ok               step 8.12s setup 38.11s
+  log2q=  46.5 m=  74 lam=  2850 L=2 ok               step 1.82s setup 5.05s
+  log2q=  48.5 m=  69 lam=  2485 L=1 ok               step 6.21s setup 27.64s
+  log2q=  48.5 m=  69 lam=  2485 L=2 ok               step 1.53s setup 3.95s
+  log2q=  52.5 m=  72 lam=  2701 L=1 ok               step 7.62s setup 34.17s
+  log2q=  52.5 m=  72 lam=  2701 L=2 ok               step 2.52s setup 5.60s
+  log2q=  25.5 m= 163 lam= 13530 L=1 ok               step 26.58s setup 236.08s
+  log2q=  29.5 m= 168 lam= 14365 L=1 ok               step 27.49s setup 230.86s
+  log2q=  31.5 m= 152 lam= 11781 L=1 ok               step 21.56s setup 113.79s
+  log2q=   nan m= 158 lam=     - L=1 timeout:1200s    
+  log2q=   nan m= 158 lam=     - L=1 skipped:memory   
+  log2q=   nan m= 144 lam=     - L=1 timeout:1200s    
+  log2q=  37.5 m= 144 lam= 10585 L=2 ok               step 16.05s setup 159.71s
+  log2q=   nan m= 150 lam=     - L=1 timeout:1200s    
+  log2q=  41.5 m= 150 lam= 11476 L=2 ok               step 19.70s setup 210.77s
+  log2q=  43.5 m= 139 lam=  9870 L=1 ok               step 94.58s setup 909.05s
+  log2q=  43.5 m= 139 lam=  9870 L=2 ok               step 13.97s setup 135.54s
+  log2q=   nan m= 144 lam=     - L=1 timeout:1200s    
+  log2q=  47.5 m= 144 lam= 10585 L=2 ok               step 15.81s setup 161.35s
+  log2q=  49.5 m= 135 lam=  9316 L=1 ok               step 84.46s setup 783.84s
+  log2q=  49.5 m= 135 lam=  9316 L=2 ok               step 12.43s setup 117.87s
+  log2q=  53.5 m= 140 lam= 10011 L=1 ok               step 95.93s setup 942.24s
+  log2q=  53.5 m= 140 lam= 10011 L=2 ok               step 25.01s setup 147.03s
+C: done in 10671s; 0 wrong/error/slept cells
+=== 2026-10-13 21:26:49 C resume: re-attempt memory skip with recalibrated predictor (cap 10 GB) ===
+C: 1 of 51 cells to run, 1 at a time, cap 1200s
+  log2q=  35.5 m= 158 lam= 12720 L=2 ok               step 22.37s setup 243.13s
+C: done in 295s; 0 wrong/error/slept cells

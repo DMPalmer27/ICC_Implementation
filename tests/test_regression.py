@@ -15,6 +15,8 @@ Description: Fast regression checks for the Week 1 optimisation pass. Unlike tes
             entropy bounds, and a quantised gradient decoding exactly through the scheme
       11. the server's overflow gate: query bounds, refusals with a status, the upload
           box check, and an exact decode at the edge of the window
+      12. the parameter-sweep harness (tools/q_sweep.py): CRT reconstruction, large-field
+          construction, and single-prime and CRT cells that decode exactly
 
 Usage:
     .venv/bin/python tests/test_regression.py
@@ -38,6 +40,7 @@ from query import (
     variables,
 )
 from quantize import (
+    NATIVE_Q_MAX,
     POWER_OF_TWO_GRID,
     FixedPointSpec,
     QueryBudget,
@@ -639,6 +642,46 @@ def test_overflow_gate():
           _raises_type(lambda: server.compute_request(lambda z: z[0]), TypeError))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 12. The parameter-sweep harness
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_sweep_harness():
+    print("\n12. tools/q_sweep.py measures only runs that decode exactly")
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+    import q_sweep
+
+    primes = q_sweep.crt_primes(2 ** 70)
+    Q = math.prod(primes)
+    check("crt_primes are distinct native primes whose product reaches the target",
+          len(set(primes)) == len(primes) and Q >= 2 ** 70
+          and all(galois.is_prime(q) and q <= NATIVE_Q_MAX for q in primes))
+    rng = np.random.default_rng(3)
+    values = [int(v) for v in rng.integers(-2 ** 62, 2 ** 62, 50)] + [(Q - 1) // 2, -(Q - 1) // 2]
+    check("crt_combine inverts reduction mod each prime, signs included",
+          all(q_sweep.crt_combine([v % q for q in primes], primes) == v for v in values))
+
+    GF = q_sweep.make_field(2 ** 521 - 1)
+    a, b = GF(3 ** 300), GF(5 ** 200)
+    check("make_field builds GF(2^521 - 1) without the primitive-element search, exactly",
+          int(a * b) == (3 ** 300 * 5 ** 200) % (2 ** 521 - 1))
+
+    field_cell = q_sweep._cell("test", [q_sweep.prime_for_bits(61)], 4, n_s=2, repeats=2)
+    r = q_sweep.measure_cell(field_cell)
+    check("a field-mode cell above the native limit decodes exactly", r.get("exact") is True,
+          str(r.get("status")))
+    for f_X, f_w in ((4, 2), (16, 8)):
+        x_spec, w_spec = FixedPointSpec(f_X, q_sweep.CLIP_X), FixedPointSpec(f_w, q_sweep.CLIP_W)
+        B = QueryBudget(2, 3, 2, x_spec, w_spec).magnitude_bound()
+        for primes in ([choose_field_size(B, warn_native=False).q], q_sweep.crt_primes(2 * B + 1)):
+            r = q_sweep.measure_cell(q_sweep._cell("test", primes, 4, n_s=2, mode="quant",
+                                                   f_X=f_X, f_w=f_w, repeats=2))
+            check(f"quantised cell f_X={f_X}, L={len(primes)}: decodes to the integer oracle",
+                  r.get("exact") is True, str(r.get("status")))
+
+
 def main():
     print("=" * 72)
     print("  ICC REGRESSION CHECKS  (Week 1 optimisation pass, Week 3 quantisation)")
@@ -656,6 +699,7 @@ def main():
     test_entropy_bounds_directions()
     test_quantized_gradient_decodes_exactly()
     test_overflow_gate()
+    test_sweep_harness()
 
     elapsed = time.perf_counter() - t0
     print("\n" + "=" * 72)

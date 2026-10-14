@@ -50,6 +50,9 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | `tools/feasibility.py` | Parameter feasibility instrument — reports `m`, `λ`, and **measured** build/solve cost |
 | `tools/extract_pdf_text.py` | Extracts `Written_Resources/*.pdf` to `extracted/*.txt` so citations are checkable |
 | `tools/quantization_study.py` | Seeded measurements behind `docs/QUANTIZATION.md`: entropy-bound validation, field-size budget, residue entropy, end-to-end decodability |
+| `tools/q_sweep.py` | The parameter sweep: phase timings vs `q` at fixed `m` (A), vs `λ` (B), quantisation formats end to end with CRT regime (a) alongside (C), verified field construction (D), Theorem 1 theory tables (T). Every timed cell must decode exactly. Run with `--jobs 1` for anything reported |
+| `tools/plot_sweep.py` | Figures from the sweep CSVs → `results/figures/fig*.pdf/.png`; feasibility thresholds are flags |
+| `tools/crt_leakage_demo.py` | Brute-force proof that several encodings of the same data, each with `m` sized alone, reveal it; joint sizing does not |
 | `results/full_test_pre_entropy_fix.txt` | Full `test_icc.py` run before the Week 1 entropy fix (baseline) |
 | `results/full_test_post_fix.txt` | Full `test_icc.py` run after it |
 | `results/feasibility_sweep.csv` | Raw rows from `tools/feasibility.py` |
@@ -58,6 +61,8 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | `docs/WEEK1_FINDINGS.md` | What the Week 1 optimization pass changed and why |
 | `docs/PREDECESSOR_PAPERS.md` | Reading notes on the 2022 and 2024 papers; what the code inherits from which, and corrections |
 | `docs/QUANTIZATION.md` | Week 3 design doc: survey of real→`F_q` embeddings, field-size derivation, the entropy bounds, recommended parameters |
+| `docs/Q_SWEEP.md` | Week of 2026-10-12: does a massive `q` make the scheme infeasible; the CRT mechanics and the multi-encoding leakage result |
+| `docs/CRT_PROOF.md` | Deferred proof plan: smoothing over `Z_Q = ∏ qᵢ` (port of Pathegama–Barg), ICC Theorem 1 over `Z_Q`, and leakage bounds for multiple encodings / re-uploads. Marks each result proved / sketch / conjecture |
 | `Written_Resources/` | The papers + the Spring 2026 report (PDFs, plus `extracted/` plain text) |
 | `requirements.txt` | Direct dependencies; `icc/` needs only `galois` + `numpy` |
 
@@ -97,6 +102,10 @@ Use the project venv (Python 3.11, `galois` + `numpy`). Run from the repo root:
 .venv/bin/python tools/feasibility.py --csv results/feasibility_sweep.csv
 .venv/bin/python tools/quantization_study.py --csv results/quantization_budget.csv
 .venv/bin/python tools/extract_pdf_text.py          # refresh Written_Resources/extracted/
+.venv/bin/python tools/q_sweep.py --exp all          # parameter sweep; hours; keep --jobs 1
+.venv/bin/python tools/q_sweep.py --exp C --resume   # continue after an interruption
+.venv/bin/python tools/plot_sweep.py                 # figures -> results/figures/
+.venv/bin/python tools/crt_leakage_demo.py           # multi-encoding leakage, ~10 s
 ```
 
 The full suite took ~81 min before the Week 1 pass and now takes ~9 s, so it is cheap to
@@ -144,6 +153,12 @@ These are thesis-math decisions. Raise them; let Daniel decide.
    2024 paper's Remark 2 derivation (`dmin(C⊥) ≥ r+1` and `dmin ≤ m+1` ⟹ `m ≥ r`) holds for
    a random code too; MDS is only where equality is met. ICC Remark 1 states the same floor
    independently. Behaviour was never affected — only the docstring reasoning, now fixed.
+
+6. **Several encodings of the same data must be sized jointly** (`docs/Q_SWEEP.md` §6). With
+   per-instance `m` the provider intersects the cosets and recovers `x` (measured: 24/30 trials, `tools/crt_leakage_demo.py`).
+   This contradicts the CRT "regime (b)" entropy gain in `docs/PLAN.md` Week 8 and
+   `docs/QUANTIZATION.md` §4E/§11, which are left unedited pending Raviv. It also applies to
+   re-uploading the same data under a fresh key.
 
 Resolved in the Week 1 pass (`week1-2-optimizations`) — do not re-report as bugs:
 per-symbol vs vector entropy scaling, the two entropy paths disagreeing, the missing
