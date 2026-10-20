@@ -285,6 +285,11 @@ feasibility model being trustworthy. Right now neither holds.
   - [ ] Measure real-data entropy: per-feature `h_i`, and how far from i.i.d. the
         coordinates actually are. This feeds Open Question 1.
 
+> **Status (2026-10-20).** Parameter sweep done and reviewed (`docs/Q_SWEEP.md`). CRT
+> deferred (`docs/CRT_PROOF.md`); single prime with the large-`q` warning is the configuration.
+> **Next: Weeks 5–6 below — linear and logistic regression by gradient descent.** Logistic needs
+> a polynomial sigmoid approximation whose degree sets `d` (see CLAUDE.md handoff).
+
 > **Change of direction (2026-10-12).** This week is a
 > parameter-feasibility sweep instead of the regression run: does the massive `q` that
 > quantising reals needs make encode/evaluate/decode infeasible? Tooling and findings in

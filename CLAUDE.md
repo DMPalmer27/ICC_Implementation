@@ -7,6 +7,50 @@ Timeline: started Jan 2026 as an independent study; the Spring 2026 report
 (`Written_Resources/`) is the deliverable for that semester. Continuing through
 ~mid-2027 as the MS thesis.
 
+## Status and next task (handoff, 2026-10-20)
+
+**Where things stand.** Branch `choose-q` (pushed) holds all work: it is stacked on the unmerged
+`week1-2-optimizations → reorg → week3-quantization → predecessor-papers`, so merging it brings in
+everything. Daniel merges on GitHub himself — commit to a branch and push; do not open PRs.
+
+- **Done:** server-side overflow gate (`icc/query.py`), seeding fix, parameter sweep
+  (`docs/Q_SWEEP.md`, figs in `results/figures/`; reviewed and well received). Answer: a big `q`
+  costs a one-time ×4.5 jump at the native limit, then is flat; single prime is feasible for all
+  formats up to `n = 100`.
+- **Decided:** stay with a single prime; `q > NATIVE_Q_MAX` is allowed with the existing
+  "expect much longer running times" warning (`quantize.choose_prime`). The CRT route is
+  **deferred** until the math is done — plan in `docs/CRT_PROOF.md` (do not implement CRT in
+  `icc/` before then).
+- **Next task: linear and logistic regression trained by gradient descent under the scheme**
+  (`docs/PLAN.md` Weeks 5–6). Training is *live*: the client sends each gradient query based on
+  the previous decoded result. Pieces already in place:
+  - protocol: weights are public *coefficients* of the query, shares never change, client
+    updates `w` in float and re-quantises (`docs/PLAN.md` "Two design decisions");
+  - `query.least_squares_gradient(n_s, P, w_codes, f_w, j)` builds component `j` of the
+    least-squares gradient; `Client.decode_results` decodes all `P` components in one solve;
+    `quantize.lift_balanced` + descale by `2^(2f_X+f_w)` gives the real gradient;
+  - recommended format (`docs/QUANTIZATION.md` §10): `f_X = 7, A_X = 4σ, f_w = 4, A_w = 2`,
+    `n_s = 25, P = 3` → `q = 1,468,006,403`, `m = 77`, `λ = 3,081`; `f_w = 0` does not train;
+  - plaintext GD already simulated in `tools/quantization_study.py` study E;
+    `tools/q_sweep.py::measure_cell` is a working end-to-end template (quantise → encode →
+    query → decode → exact integer check);
+  - data: `sklearn.datasets.load_diabetes`, standardised, plus a synthetic i.i.d. control.
+- **Logistic regression is not a drop-in — raise this before coding it.** The gradient
+  `Σᵢ (σ(xᵢ·w) − yᵢ) xᵢ` contains the sigmoid, which is not a polynomial, so it must be replaced by
+  a polynomial approximation. A degree-1 approximation (`σ(z) ≈ 1/2 + z/4`) keeps the query at
+  degree 2 in the data (fits `d = 2`) but makes the update essentially least squares on shifted
+  labels. A degree-3 approximation gives degree 4 in the data, which needs `d = 4` shares
+  (`λ = C(m+4, 4)`, far more workers), a larger `q` (four data factors), and lowers the entropy
+  ceiling to `h < 1/4` (`docs/QUANTIZATION.md` §11). Non-integer approximation coefficients must
+  be folded in as public fixed-point integers. This is a thesis decision for Daniel/Raviv.
+- **Pending small items:** add a re-upload caveat to the `QueryBudget` docstring (it suggests
+  "re-upload with a larger budget", which leaks — `docs/Q_SWEEP.md` §6.3; awaiting Daniel's OK);
+  optional `SystemContext.from_budget` (q → entropy bounds → m in one place, useful for GD);
+  whether to keep the field-native toy setups in `test_icc.py` (recommended: keep); untracked
+  smoke outputs `results/*_fast*`, `results/figures_fast/` (scratch, safe to delete).
+- **Open questions for Raviv:** `docs/PLAN.md` open questions 1–9, known issue 1 below (`ε_c`
+  exponent), and `docs/CRT_PROOF.md` / `docs/Q_SWEEP.md` §6.4.
+
 ## What the scheme does
 
 A user holds `x ∈ F_q^n` from an **unknown, non-uniform** distribution. They want a
@@ -96,7 +140,7 @@ Use the project venv (Python 3.11, `galois` + `numpy`). Run from the repo root:
 
 ```bash
 .venv/bin/python main.py
-.venv/bin/python tests/test_regression.py          # ~8 s, run this first
+.venv/bin/python tests/test_regression.py          # 77 checks, ~11 s, run this first
 .venv/bin/python tests/test_icc.py                 # full suite, ~9 s
 .venv/bin/python tests/test_icc.py --fast          # ~2.5 s
 .venv/bin/python tools/feasibility.py --csv results/feasibility_sweep.csv
@@ -178,3 +222,10 @@ per-symbol vs vector entropy scaling, the two entropy paths disagreeing, the mis
   tables need to be reproducible: prefer seeded runs and save raw output.
   `np.random.seed` does **not** reach `galois` (`GF.Random` takes its own `seed=`), so pass
   an explicit `rng` to `generate_random_G` and `Client` — never seed a real client's key.
+- Timing runs that will be reported: one cell at a time (`--jobs 1`), on AC power with the lid
+  open (`caffeinate`), and check the `power`/`sleep_events` columns. Concurrency inflated
+  timings ×3.5 and a lid-close sleep corrupted a cell during the sweep.
+- Above `log2 q ≈ 31.5` galois uses Python ints (×4.5–8 slower per step); even below it, its
+  matrix product falls back to Python ints when `max(A.shape)·q² > 2^63` (`docs/Q_SWEEP.md` §3).
+  `galois.GF(q)` for a huge generic prime can hang factoring `q − 1`; pass
+  `primitive_element=…, verify=False` as `tools/q_sweep.make_field` does.
