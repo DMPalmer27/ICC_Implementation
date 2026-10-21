@@ -300,6 +300,9 @@ feasibility model being trustworthy. Right now neither holds.
 
 ### Weeks 5–6 · Linear regression under the scheme
 
+> **Plan (2026-10-20): `docs/GD_LINEAR_REGRESSION.md`.** It adds a leakage measurement on
+> synthetic data and flags that live GD publishes the weights (a channel Theorem 1 does not cover).
+
 - **W5** — One GD step, end to end. Encode `(X, y)`, query the gradient, decode, compare
   against the plaintext float gradient. Success = relative error at the quantization floor.
   Add the vector-valued query path (`p` gradient components share one `M`).

@@ -22,7 +22,10 @@ everything. Daniel merges on GitHub himself — commit to a branch and push; do 
   **deferred** until the math is done — plan in `docs/CRT_PROOF.md` (do not implement CRT in
   `icc/` before then).
 - **Next task: linear and logistic regression trained by gradient descent under the scheme**
-  (`docs/PLAN.md` Weeks 5–6). Training is *live*: the client sends each gradient query based on
+  (`docs/PLAN.md` Weeks 5–6). **Linear plan: `docs/GD_LINEAR_REGRESSION.md`** (branch
+  `gd-linear-regression`, stacked on `choose-q`); its decisions D1–D4 gate implementation. Key
+  finding there: live GD publishes `ŵ_t` as query coefficients, a data-dependent channel
+  Theorem 1 does not cover. Training is *live*: the client sends each gradient query based on
   the previous decoded result. Pieces already in place:
   - protocol: weights are public *coefficients* of the query, shares never change, client
     updates `w` in float and re-quantises (`docs/PLAN.md` "Two design decisions");
@@ -105,6 +108,7 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | `docs/WEEK1_FINDINGS.md` | What the Week 1 optimization pass changed and why |
 | `docs/PREDECESSOR_PAPERS.md` | Reading notes on the 2022 and 2024 papers; what the code inherits from which, and corrections |
 | `docs/QUANTIZATION.md` | Week 3 design doc: survey of real→`F_q` embeddings, field-size derivation, the entropy bounds, recommended parameters |
+| `docs/GD_LINEAR_REGRESSION.md` | Plan for live GD linear regression: provider's view, exact-entropy synthetic source, exact leakage measurement, decisions D1–D4 |
 | `docs/Q_SWEEP.md` | Week of 2026-10-12: does a massive `q` make the scheme infeasible; the CRT mechanics and the multi-encoding leakage result |
 | `docs/CRT_PROOF.md` | Deferred proof plan: smoothing over `Z_Q = ∏ qᵢ` (port of Pathegama–Barg), ICC Theorem 1 over `Z_Q`, and leakage bounds for multiple encodings / re-uploads. Marks each result proved / sketch / conjecture |
 | `Written_Resources/` | The papers + the Spring 2026 report (PDFs, plus `extracted/` plain text) |
