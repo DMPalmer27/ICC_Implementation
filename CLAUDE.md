@@ -23,7 +23,7 @@ everything. Daniel merges on GitHub himself — commit to a branch and push; do 
   `icc/` before then).
 - **Next task: linear and logistic regression trained by gradient descent under the scheme**
   (`docs/PLAN.md` Weeks 5–6). **Linear plan: `docs/GD_LINEAR_REGRESSION.md`** (branch
-  `gd-linear-regression`, stacked on `choose-q`); its decisions D1–D4 gate implementation. Key
+  `gd-linear-regression`, stacked on `choose-q`); decisions D1–D4 settled 2026-10-21 (all as recommended); next step is §8 step 1. Key
   finding there: live GD publishes `ŵ_t` as query coefficients, a data-dependent channel
   Theorem 1 does not cover. Training is *live*: the client sends each gradient query based on
   the previous decoded result. Pieces already in place:

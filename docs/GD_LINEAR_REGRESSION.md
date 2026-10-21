@@ -10,8 +10,10 @@ Everything privacy-relevant is written by hand: the training loop, the data sour
 exact entropies, and the leakage computation. No scikit-learn, no autograd, no MI-estimator
 library. NumPy is used for array arithmetic, and `galois` for `F_q` arithmetic as before.
 
-Status: **plan only, nothing implemented yet.** The decisions marked **D1–D4** in §9 need
-Daniel's answer before the step that depends on each one.
+Status: **plan only, nothing implemented yet.** Decisions D1–D4 (§9) were **settled
+2026-10-21, all as recommended**: live GD, with the weight channel measured; `m` from the exact
+entropy; exact leakage at toy scale plus an attack at `n = 100`; the default source and
+schedule.
 
 ---
 
@@ -81,6 +83,32 @@ During a training run, the provider (admin and all workers, colluding) holds:
 | the worker outputs `f_{ŵ_t}(X̃ − tG)` for every `t ∈ I_{d,m}` | yes | adds nothing (Lemma A) |
 | the refusal statuses, and `T` itself | yes | only through `ŵ_t`; `T` is fixed in advance |
 | `η`, `w_0`, the rounding rule | effectively yes: they are recoverable from the `ŵ_t` sequence, so treat them as public | no, if they are set from the design (§4.3) |
+
+### 2.1a Why the weights are not hidden by the key
+
+Only the **data** is encoded. The key `k` masks `x` at upload (`x̃ = x + kG`), and it is used
+once more, at decode, to evaluate the interpolated `g` at `k`. The query polynomial is never
+encoded. The workers have to evaluate it on their shares, so the admin receives it in the
+clear: "they share the identity of `f` with the system admin" (ICC §II). In live GD the
+weights are the coefficients of that polynomial.
+
+A concrete step at the case study. The client holds `w_t = [0.5, −0.125, 0.625]`, so
+`ŵ_t = [8, −2, 10]` (×16, since `f_w = 4`). Component 0 of the gradient query is
+
+```
+g_0(z) = Σ_i ( 8·z_{i,0} − 2·z_{i,1} + 10·z_{i,2} − 16·z_{y_i} ) · z_{i,0}
+```
+
+and the admin reads `8, −2, 10` directly. The decoded gradient goes only to the client, and that
+part is private. But the client then sends step `t+1` with, say, `ŵ_{t+1} = [9, −2, 10]`, and
+`ŵ_{t+1} − ŵ_t ≈ −(η/n_s)·g_t·16`. **So each decoded gradient reaches the provider one step later,
+rounded to the weight grid, through the next query.** At the end, the provider holds `ŵ_T`,
+which is the fitted model.
+
+The weights cannot be moved under the key without changing the protocol. They would have to
+become data, which means a fresh upload every step (a re-upload, known issue 6) and a degree-3
+query `x·x·w`. The alternative that does work is §2.4: make the queries independent of the
+data.
 
 ### 2.2 Three reductions
 
@@ -437,7 +465,7 @@ Start that run only after checking that the laptop is on power.
 
 ---
 
-## 9. Decisions needed (D1–D4) and things being flagged rather than decided
+## 9. Decisions (D1–D4: settled 2026-10-21, all as recommended) and things flagged rather than decided
 
 - **D1. Threat model for the weights.** Is the provider allowed to learn `ŵ_t`, i.e. the
   model? Recommended: implement live GD as requested, measure the query channel (E5–E7) and
