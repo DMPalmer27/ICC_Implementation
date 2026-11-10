@@ -14,6 +14,8 @@ Status: **plan only, nothing implemented yet.** Decisions D1–D4 (§9) were **s
 2026-10-21, all as recommended**: live GD, with the weight channel measured; `m` from the exact
 entropy; exact leakage at toy scale plus an attack at `n = 100`; the default source and
 schedule.
+**Phase 1 (2026-11-10): convergence across many synthetic distributions, encoded vs unencoded,
+in §10**, which adds an intercept (C3) and a per-distribution `η` (C4). Leakage is Phase 2.
 
 ---
 
@@ -416,7 +418,8 @@ New files only. `icc/` keeps depending on nothing but `galois` and `numpy`.
 | `tools/leakage.py` | `parity_check(G)` (row-reduce over `GF(q)`; `rank G`); `syndromes(X_codes, H)`; `exact_mi(prob, keys_a, keys_b)`; `enumerate_support(source)`; `ProviderTranscript` |
 | `tools/gd_setup.py` | `upload_context(format, source, seeds)`: the §4.2 chain in one place |
 | `tools/gd_experiment.py` | E1–E7, each one seeded and writing CSV to `results/gd_*.csv` plus a printed report to `results/gd_*.txt`; `--fast`; `--exp` |
-| `tools/plot_gd.py` | loss curves, the leakage-vs-`m` CDF, leakage vs `t`; PDF and PNG into `results/figures/` |
+| `tools/gd_sweep.py` | Phase 1 distribution sweep S1–S4 (§10.6), resumable |
+| `tools/plot_gd.py` | §10.7 figures, loss curves, the leakage-vs-`m` CDF, leakage vs `t`; PDF and PNG into `results/figures/` |
 | `tests/test_gd.py` | the §7 checks; a fast subset is also added to `tests/test_regression.py` |
 
 Seeds: one `np.random.SeedSequence` per run, spawned into the named streams `data`, `G`, `key`,
@@ -445,7 +448,7 @@ seeded key is for experiments only (`Client` docstring).
 
 ---
 
-## 8. Order of work, with checkpoints
+## 8. Order of work, with checkpoints (superseded by §10.9 for Phase 1)
 
 1. `tools/synthetic_source.py` with exact entropies and tests 6–7. **Checkpoint:** print the
    case-study `m` from exact entropy next to the `entropy_bounds` and i.i.d.-estimator values.
@@ -478,7 +481,9 @@ Start that run only after checking that the laptop is on power.
   which I would not trust.
 - **D4. Source shape.** Recommended: Gaussian features, linear-Gaussian labels with
   `w* = [0.5, −0.25, 0.625]`, no intercept (the source has zero mean by construction),
-  `η = 0.5`, `T = 200`, nearest rounding.
+  `η = 0.5`, `T = 200`, nearest rounding. **Superseded for the distribution sweep by §10
+  (C3: an intercept is added; C4: `η` and `T` per distribution, from the design).** The
+  defaults still apply to E1/E2 at the case study.
 
 **For Raviv** (add to `PLAN.md` open questions as 10–11 once Daniel agrees):
 
@@ -492,3 +497,187 @@ Start that run only after checking that the laptop is on power.
 both), issue 2 (i.i.d. entropy: measured, not used), issue 3 (`entropy_bounds`: checked against
 the truth), issue 6 (re-upload: not used; a single upload serves every step). Logistic
 regression, `load_diabetes`, CRT and stragglers remain out of scope for this round.
+
+---
+
+## 10. Phase 1: convergence across synthetic distributions (added 2026-11-10)
+
+**Goal.** Train by live GD on many synthetic distributions, both through the scheme and
+unencoded, and compare convergence by data type. Convergence comes first; the leakage work
+(§5, E4–E7) becomes Phase 2.
+
+**Decisions (2026-11-10):**
+- **C1. Convergence is measured both in steps and in wall-clock time, kept separate.**
+- **C2. Every run goes through the real scheme.** The plaintext integer loop is kept only as
+  the bit-for-bit check.
+- **C3. An intercept is added**, folded into the query as a public coefficient. This replaces
+  D4's "no intercept".
+- **C4. The learning rate is set per distribution, from the design.**
+
+### 10.1 What "encoded vs unencoded" measures
+
+Encoding adds **zero** arithmetic error: the scheme's trajectory equals plaintext integer GD bit
+for bit (§4.4 check 1, asserted in every run). So the comparison splits cleanly into two parts:
+
+| axis | encoded | unencoded | what the difference is |
+|---|---|---|---|
+| steps to converge | scheme GD on fixed-point codes | float GD on the real-valued data (§4.4 ref. 3) | **quantisation only**: `f_X = 7` data and the `1/16` weight grid |
+| wall-clock to converge | steps × measured (eval + decode) per step, plus setup (field, `M`, encode, store) | steps × float step time | **the scheme's overhead**, about 1.7 s/step at `n = 100` against microseconds |
+
+Float GD on the dequantised codes (ref. 2) sits between the two and separates the data's
+quantisation from the weights'. The unencoded loop is hand-written NumPy: a matrix–vector
+product per step, with no library solver.
+
+### 10.2 The intercept (C3)
+
+The model is `y ≈ x·w + b`, and the bias `b` is quantised like a weight: `b̂ = round(b·2^{f_w})`,
+clipped at a public `A_b` (default 4). The residual of sample `i`, at the common scale
+`2^{f_X + f_w}`:
+
+```
+r_i(z) = Σ_k ŵ_k·z_{X(i,k)}  +  2^{f_X}·b̂  −  2^{f_w}·z_{y(i)}        # 2^{f_X}·b̂ is a constant term
+g_j(z) = Σ_i r_i(z) · z_{X(i,j)}          j = 0..P-1   (degree 2)
+g_b(z) = Σ_i r_i(z) · 2^{f_X}                           (degree 1)
+```
+
+All `P + 1` components land at the scale `2^{2f_X + f_w}`, so they descale together. `Polynomial`
+already supports constant terms. The server's gate is computed per query, so it needs no
+change.
+
+Changes to `icc/`:
+- `query.least_squares_gradient` gains an optional `bias_code` and a `j = P` bias component.
+- `quantize.gradient_bound_worst_case` and `QueryBudget` gain `A_b`, and the residual bound
+  becomes `P·X̂max·Ŵmax + 2^{f_X}·B̂max + 2^{f_w}·Ŷmax`. The bias component's bound is
+  `n_s·2^{f_X}·(…)`, which is no larger than the feature components' bound, since
+  `2^{f_X} ≤ X̂max`.
+- With the defaults (`X̂max = 512, Ŵmax = 32, B̂max = 64`) this collapses to **`B = n·2^23`**, i.e.
+  `log2 q ≈ 24 + log2 n`. That is 30.6 at `n = 100` and stays native up to `n ≈ 180`. So **one
+  format (`f_X = 7, A_X = 4, f_w = 4, A_w = 2, A_b = 4`) serves every size in the grid**, which
+  keeps the comparison fair.
+- Tests: the bias component decodes exactly; the new `B` matches `worst_case_bound` with every
+  weight at its clip; and the old no-intercept path is unchanged (regression oracle).
+
+The intercept does **not** remove the conditioning cost of a non-zero mean. It moves it into the
+augmented second-moment matrix `E[[x;1][x;1]ᵀ]`. For one feature with mean 1 and variance 1 that
+matrix is `[[2,1],[1,1]]`, with `κ = 6.9`, against 1 for centred data. This is a real effect and
+the sweep should report it (shape family `exponential` below).
+
+### 10.3 Distribution catalogue
+
+Every family is defined by its exact CDF, written by hand (`math.erf`, `math.exp`,
+`math.atan`), and discretised onto the code lattice cell by cell, with clipped tails collected on
+the boundary codes. That keeps §3's exact entropy available for independent features. Unless
+stated otherwise, features have **population variance 1**. Their means are left as they come out,
+and the intercept handles them.
+
+| family | definition | mean | what it probes |
+|---|---|---|---|
+| `gauss` | `N(0,1)` | 0 | baseline |
+| `uniform` | `U[−√3, √3]` | 0 | maximum entropy for a bounded range; light tails |
+| `laplace` | scale `1/√2` | 0 | moderately heavy tails |
+| `student3` | Student-t with 3 degrees of freedom, scaled by `1/√3` (its CDF has a closed form) | 0 | heavy tails; clip saturation at `±A_X` |
+| `exponential` | `Exp(1)` | 1 | skew, positive support, non-zero mean |
+| `lognormal` | `exp(N(0, 0.75²))`, rescaled to variance 1 | > 0 | strong skew plus a heavy right tail |
+| `spiked` | 80% exactly 0, 20% `N(0, 5)` | 0 | a large atom: low entropy, so a larger `m` and a costlier scheme |
+| `bimodal` | `½N(−0.9, 0.436²) + ½N(0.9, 0.436²)` | 0 | multimodal |
+| `discrete3` | uniform on `{−1, 0, 1}·√1.5` | 0 | few-valued, categorical-like; very low entropy |
+| `corr(ρ)` | Gaussian, pairwise correlation `ρ ∈ {0, 0.5, 0.9, 0.95}` | 0 | **conditioning**: `κ = (1 + (P−1)ρ)/(1−ρ)`, i.e. 28 at `ρ = 0.9`, `P = 3` |
+
+**Labels:** `y = x·w* + b* + e`, with `e ~ N(0, σ_E²)` by default and Laplace noise as a variant.
+`w*` and `b*` are fixed per run from the design. The noise is set by a signal-to-noise ratio
+(SNR) `∈ {10, 1, 0.1}`; at the default SNR `y` has unit variance. Labels are clipped at `±A_X`
+like the features.
+
+**Sizes** `(n_s, P)`, all with `n = n_s(P+1) ≤ 110` so they stay within the scheme's practical
+range:
+
+| `(n_s, P)` | `n` | regime |
+|---|---:|---|
+| (25, 3) | 100 | the case study |
+| (50, 1) | 100 | many samples, one feature |
+| (10, 9) | 100 | many features, few samples |
+| (6, 10) | 66 | more features than samples: `XᵀX` is singular, and GD converges to the minimum-norm solution, so `κ` is reported on the range |
+| (10, 3) | 40 | small and fast; the scaling reference |
+
+`load_diabetes` and `n_s ≫ 50` remain out of scope for the scheme. They can run unencoded only,
+if wanted.
+
+### 10.4 Learning rate and run length, from the design (C4)
+
+- `η = 1/λ_max(H_pop)`, where `H_pop` is the **population** augmented second-moment matrix of
+  the family. It is computed exactly from the family's parameters, never from the sample. The
+  update stays `w ← w − (η/n_s)·g`.
+- `T` is fixed per configuration from the design: `T = max(200, ⌈3·κ_pop·ln(1/tol_min)⌉)` with
+  `tol_min = 1e-3`, capped at 2,000. That is about 600 steps at `ρ = 0.9` and the cap at
+  `ρ = 0.95`, where `κ = 58`. Both are public functions of the design, so a fixed `T` still
+  holds (§4.3).
+- The sample `λ_max` can exceed the population value. If it passes `2λ_pop` the run oscillates,
+  and clipping at `A_w` keeps that bounded. Record it as `diverged`; never retune on the sample.
+
+### 10.5 Convergence metrics (read off the trajectory afterwards)
+
+- `excess_t = (L(w_t) − L(w_OLS)) / L(w_OLS)`: the relative excess loss on the **real-valued**
+  data, where `w_OLS` (with intercept) is solved by hand. The same reference is used for the
+  encoded and the unencoded runs.
+- **Steps to tolerance**, `τ(tol)`: the first `t` after which `excess` stays `≤ tol`, for
+  `tol ∈ {1e-1, 1e-2, 1e-3}`.
+- **Plateau**: the median `excess` over the last 10% of steps. For the encoded runs this is the
+  quantisation floor. If `tol` is below the floor, `τ` is reported as "not reached", never as
+  `T`.
+- **Wall-clock** `= setup + τ × per-step time` (C1), with per-step eval and decode measured in
+  every run.
+- Context per run: the sample `κ` and `κ_pop`, the clip saturation fraction (data and weights),
+  `‖w_T − w*‖`, `m`, `λ` and `h`.
+
+### 10.6 Grid and cost (C2: every run through the scheme)
+
+Five seeds per cell. Each seed is a fresh dataset, `G` and key, drawn from its own spawned stream.
+
+| sweep | cells | runs |
+|---|---|---:|
+| S1 shape | 9 families at (25, 3), SNR 1 | 45 |
+| S2 conditioning | `corr(ρ)`, 4 values, at (25, 3) | 20 |
+| S3 size | 5 sizes × {`gauss`, `exponential`, `spiked`} | 75 |
+| S4 noise | SNR 3 values × {Gaussian, Laplace} noise, `gauss` features | 30 |
+
+Estimated cost:
+- At `n = 100` a step costs about 1.7 s, so a 200-step run takes about 6 min.
+- Low-entropy families (`spiked`, `discrete3`) push `m` toward `n`. `λ` then rises to about
+  5,000, roughly doubling the cost per step.
+- The `ρ = 0.95` cells run 2,000 steps, about an hour per seed.
+- **Total: about 20–25 h.** That means overnight runs, on AC power under `caffeinate` with
+  `--jobs 1` (the house rules for reported timings), or on the DGX Spark. There the step
+  counts are unaffected, but the timings should be re-measured one cell at a time.
+
+The driver writes one CSV row per run plus a per-step trajectory file, and supports `--resume`
+like `q_sweep.py`, so a sleep or a battery stop loses at most one run.
+
+### 10.7 Figures (`tools/plot_gd.py`)
+
+1. Excess loss vs step, encoded vs unencoded, one panel per family (S1).
+2. **Steps to `tol = 1e-2` vs `κ`**, every run as a point coloured by family, with the theory
+   line `κ·ln(1/tol)`. I expect this to be the central figure.
+3. Plateau (quantisation floor) by family: what fixed point costs in accuracy.
+4. Wall-clock to converge, encoded vs unencoded (log scale), split into setup and per-step.
+5. Per-step cost and `λ` by family: low-entropy data is more expensive to protect.
+6. Steps and wall-clock vs size (S3); excess loss vs SNR (S4).
+
+### 10.8 Entropy for `m` in this phase
+
+D2 still holds where it can: the exact entropy (§3) is used for independent features with any
+of the marginals above, since the tilted-convolution method only needs the marginal pmfs. For
+`corr(ρ)` the features are not independent. Those runs use the joint-density form of
+`quantize.entropy_bounds`, recorded in a `m_source` column. For this phase `m` affects only `λ`
+and so the wall-clock time; it never changes the step count.
+
+### 10.9 Revised order of work
+
+1. `tools/synthetic_source.py`: the catalogue above, its exact pmfs, and sampling. Exact
+   entropies for independent features (tests 6–7).
+2. The intercept in `query.py` / `quantize.py`, with its tests.
+3. `icc/training.py` (`P+1` components), the plaintext integer and float references, and
+   tests 1–2. Then E1 and E2 at the case study as before.
+4. `tools/gd_sweep.py`: the S1–S4 driver (resumable, one row per run), on top of the §4.2 upload
+   chain. A `--fast` grid with 1 seed and short `T` for smoke tests.
+5. `tools/plot_gd.py`. **Phase 1 checkpoint:** figures 1–6 from a full run.
+6. Phase 2: leakage (§5, E4–E7), unchanged.
