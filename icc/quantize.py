@@ -338,6 +338,8 @@ class QueryBudget:
     :param x_spec: Format the feature matrix is stored in
     :param w_spec: CEILING on the weight format of any future query, not one step's format
     :param y_spec: Format the labels are stored in; defaults to x_spec, which is required
+    :param b_spec: CEILING on the intercept's format, or None for the model without one;
+        must share the weights' fractional bits
     """
     n_samples: int
     n_features: int
@@ -345,6 +347,7 @@ class QueryBudget:
     x_spec: FixedPointSpec
     w_spec: FixedPointSpec
     y_spec: Optional[FixedPointSpec] = None
+    b_spec: Optional[FixedPointSpec] = None
 
     def magnitude_bound(self) -> int:
         """
@@ -353,7 +356,7 @@ class QueryBudget:
         :return: Bound B, suitable for choose_field_size
         """
         return gradient_bound_worst_case(self.n_samples, self.n_features, self.x_spec,
-                                         self.w_spec, self.y_spec)
+                                         self.w_spec, self.y_spec, self.b_spec)
 
 
 @dataclass(frozen=True)
@@ -475,7 +478,8 @@ def choose_field_size(magnitude_bound: int, data_dependent: bool = False,
 
 def gradient_bound_worst_case(n_samples: int, n_features: int,
                               x_spec: FixedPointSpec, w_spec: FixedPointSpec,
-                              y_spec: Optional[FixedPointSpec] = None) -> int:
+                              y_spec: Optional[FixedPointSpec] = None,
+                              b_spec: Optional[FixedPointSpec] = None) -> int:
     """
     Hard bound on the integer least-squares gradient, from the clip bounds alone.
 
@@ -507,8 +511,18 @@ def gradient_bound_worst_case(n_samples: int, n_features: int,
     :param n_features: Number of features P
     :param x_spec: Format of the feature matrix
     :param w_spec: Format of the weight vector
+    INTERCEPT. With b_spec, the residual gains the constant 2^{f_X} * b (query.py), so its
+    bound becomes P * Xmax * Wmax + 2^{f_X} * Bmax + 2^{f_w} * Ymax, and the feature
+    components are bounded by n_s * Xmax times that. The bias component multiplies the
+    residual by 2^{f_X} instead of by a data value, so its bound is n_s * 2^{f_X} times the
+    same residual bound; both are computed and the larger returned, which is the feature
+    bound whenever the clip is at least 1 (2^{f_X} <= Xmax). At the Phase 1 format (f_X = 7,
+    A_X = 4, f_w = 4, A_w = 2, A_b = 4) this is exactly B = n * 2^23.
+
     :param y_spec: Format of the labels; defaults to x_spec, which the derivation assumes
-    :return: Hard bound B on |g_j|
+    :param b_spec: Format of the intercept, or None for the model without one; its f must
+        equal w_spec.f, since the bias is quantised and scaled like a weight
+    :return: Hard bound B on |g_j|, over every component
     """
     y_spec = y_spec or x_spec
     if y_spec.f != x_spec.f:
@@ -517,7 +531,16 @@ def gradient_bound_worst_case(n_samples: int, n_features: int,
             f"scale 2^(2 f_X + f_w); got f_y = {y_spec.f}, f_X = {x_spec.f}"
         )
     xmax, wmax, ymax = x_spec.max_int, w_spec.max_int, y_spec.max_int
-    return n_samples * (n_features * xmax * xmax * wmax + 2 ** w_spec.f * xmax * ymax)
+    if b_spec is None:
+        return n_samples * (n_features * xmax * xmax * wmax + 2 ** w_spec.f * xmax * ymax)
+    if b_spec.f != w_spec.f:
+        raise ValueError(
+            f"the intercept must share the weights' fractional bits (f_b == f_w) so the "
+            f"residual has one scale; got f_b = {b_spec.f}, f_w = {w_spec.f}"
+        )
+    residual = (n_features * xmax * wmax + 2 ** x_spec.f * b_spec.max_int
+                + 2 ** w_spec.f * ymax)
+    return n_samples * residual * max(xmax, 2 ** x_spec.f)
 
 
 def gradient_bound_data_dependent(x_codes, y_codes, w_spec: FixedPointSpec) -> int:

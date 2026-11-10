@@ -681,3 +681,74 @@ and so the wall-clock time; it never changes the step count.
    chain. A `--fast` grid with 1 seed and short `T` for smoke tests.
 5. `tools/plot_gd.py`. **Phase 1 checkpoint:** figures 1–6 from a full run.
 6. Phase 2: leakage (§5, E4–E7), unchanged.
+
+### 10.10 Implementation status (2026-11-10): ready to run
+
+Phase 1 is implemented and tested. Only the full sweep itself remains to be run.
+
+| file | what it does |
+|---|---|
+| `icc/query.py`, `icc/quantize.py` | the intercept (§10.2): `least_squares_gradient(..., bias_code=, f_X=)`, and `QueryBudget(b_spec=)` / `gradient_bound_worst_case(b_spec=)`. The old no-intercept path is unchanged; `test_regression.py` still passes 77/77 |
+| `icc/training.py` | `GDSchedule`, `run_gd` (the loop), `scheme_gradient`, and `train_linear_regression(client, server, …)`. The trainer has no input through which the plaintext could arrive |
+| `tools/synthetic_source.py` | the catalogue (§10.3): CDFs and samplers written by hand, exact discretised pmfs, the design's `w*`, `b*` and `σ_E`, and exact Rényi entropies (tilted convolution plus a knapsack), with a brute-force twin |
+| `tools/gd_reference.py` | plaintext integer GD (the bit-for-bit oracle), float GD (the unencoded baseline), a Jacobi eigen-solver, the minimum-norm least-squares solve, and the metrics |
+| `tools/gd_setup.py` | the §4.2 upload chain, and the design schedule (`η`, `T`) |
+| `tools/gd_sweep.py` | the S1–S4 driver. `--dry-run`, `--fast`, `--resume`, `--sweep`, `--seeds` |
+| `tools/plot_gd.py` | figures 1–6 into `results/figures/gd_fig*.pdf/.png` |
+| `tests/test_gd.py` | 38 checks, about 2 s |
+
+**Changes from §10.4–10.6 made during implementation:**
+
+1. **The step size has a Marchenko–Pastur factor.** It is now
+   `η = 1/(λ_max(H_pop)·(1+√((P+1)/n_s))²)`, and `T` scales by the same factor. With
+   `η = 1/λ_max(H_pop)` alone, Gaussian data diverged at `(n_s, P) = (10, 3)`: the sample's
+   top eigenvalue sits up to about that factor above the population one. The factor depends
+   only on `(n_s, P)`, so `η` is still public and design-only. Measured with plaintext float GD
+   over the whole grid, 5 seeds per cell:
+   - No cell diverges except `student3`: 2 of 5 seeds at (25, 3) and 1 of 5 at (6, 10), because
+     heavy tails push the sample spectrum past the design's prediction. Those runs are recorded
+     as `diverged`, which is a finding.
+   - The square design (10, 9), where `n_s ≈ P+1`, often fails to reach `1e-2` in 200 steps,
+     because the smallest sample eigenvalue collapses toward 0. That is real and is reported
+     as "not reached".
+2. **The metric is the normalised suboptimality** `(L(w_t) − L*)/(L(w_0) − L*)`, not
+   `(L − L*)/L*`. The latter is undefined when `P ≥ n_s`, where `L* = 0`. The new metric starts
+   at 1, and a tolerance of `1e-2` means "99% of the initial excess removed". It is also
+   recorded against the dequantised data's own optimum (`scheme_vs_deq_opt`), which separates
+   the floor set by the weight grid from the bias that quantising the data introduces.
+3. **Duplicate cells run once.** `ρ = 0` (S2), size (25, 3) (S3) and SNR 1 with Gaussian
+   noise (S4) are all the S1 `gauss` cell, and `plot_gd.py` reuses it. The grid is therefore
+   **29 cells × 5 seeds = 145 runs**, not 170.
+4. **The cost is about 58 h, not 20–25 h.** `--dry-run` uses a per-step model calibrated
+   against `q_sweep` C, and it matched three direct measurements on this machine to within 15%:
+   - (25, 3), λ = 3,003: 2.16 s/step measured, 2.19 s estimated.
+   - (10, 9), λ = 3,003: 4.78 s measured, 5.48 s estimated.
+   - spiked (10, 9), λ = 5,151: 11.45 s measured, 12.45 s estimated.
+
+   The 20–25 h figure in §10.6 left out two things: the intercept's extra query, and the long
+   `T` that uncentred and correlated families need. The total is dominated by a few cells:
+
+   | cell | `T` | minutes per seed | hours for 5 seeds |
+   |---|---:|---:|---:|
+   | exponential (10, 9) | 2,000 | 205 | 17 |
+   | ρ = 0.95 | 2,000 | 89 | 7.4 |
+   | lognormal (25, 3) | 1,622 | 67 | 5.6 |
+   | ρ = 0.9 | 1,138 | 49 | 4.1 |
+   | exponential (6, 10) | 2,000 | 46 | 3.8 |
+   | exponential (25, 3) | 989 | 41 | 3.4 |
+
+   The other 23 cells together take about 17 h. Options, none applied yet: run the grid as is
+   (about 2.5 days, resumable); cap `T` lower; give the expensive cells fewer seeds; or run on
+   the DGX Spark. Either way, `--resume` makes it safe to run in chunks: one sweep per night
+   with `--sweep S1` and so on.
+
+**How to run** (on AC power, lid open; reported timings need one run at a time, which is the
+only mode the driver has):
+
+```bash
+.venv/bin/python tests/test_gd.py                                  # 38 checks, ~2 s
+.venv/bin/python tools/gd_sweep.py --dry-run                       # grid, T, m, λ, estimated hours
+caffeinate -dimsu .venv/bin/python tools/gd_sweep.py --sweep S1    # ~15 h
+caffeinate -dimsu .venv/bin/python tools/gd_sweep.py --resume      # everything left
+.venv/bin/python tools/plot_gd.py                                  # figures
+```

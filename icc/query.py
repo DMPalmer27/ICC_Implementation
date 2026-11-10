@@ -247,9 +247,10 @@ def variables(n: int):
 
 
 def least_squares_gradient(n_samples: int, n_features: int, w_codes, f_w: int,
-                           j: int) -> Polynomial:
+                           j: int, bias_code: Optional[int] = None,
+                           f_X: Optional[int] = None) -> Polynomial:
     """
-    Builds the degree-2 query for component j of the least-squares gradient.
+    Builds the query for component j of the least-squares gradient.
 
         g_j(z) = sum_i ( sum_k z[X(i,k)] * w_k  -  2^{f_w} * z[y(i)] ) * z[X(i,j)]
 
@@ -260,13 +261,31 @@ def least_squares_gradient(n_samples: int, n_features: int, w_codes, f_w: int,
     (docs/QUANTIZATION.md section 5). With every |w_k| at the clip bound, its
     worst_case_bound equals quantize.gradient_bound_worst_case exactly.
 
+    With an intercept (bias_code given, quantised at the weights' f_w), the residual gains the
+    constant term 2^{f_X} * b, which puts it at the same scale 2^{f_X + f_w} as the other
+    terms, and component j = n_features is the bias gradient
+
+        g_b(z) = sum_i residual_i(z) * 2^{f_X}            (degree 1)
+
+    so all P + 1 components share the scale 2^{2 f_X + f_w} and descale together
+    (docs/GD_LINEAR_REGRESSION.md section 10.2). The bias is a public coefficient like the
+    weights; the stored data is unchanged.
+
     :param n_samples: Number of samples n_s
     :param n_features: Number of features P
     :param w_codes: Quantised weight vector, integer codes
-    :param f_w: Fractional bits of the weights
-    :param j: Gradient component
+    :param f_w: Fractional bits of the weights (and of the bias)
+    :param j: Gradient component; n_features selects the bias component
+    :param bias_code: Quantised intercept, or None for the model without one
+    :param f_X: Fractional bits of the stored data; required with an intercept
     :return: The query polynomial
     """
+    if bias_code is not None and f_X is None:
+        raise ValueError("an intercept needs f_X: its constant term is 2^{f_X} * bias_code")
+    n_components = n_features + (bias_code is not None)
+    if not 0 <= j < n_components:
+        raise ValueError(f"component j = {j} out of range for {n_components} components")
+
     x = variables(n_samples * (n_features + 1))
     iX = lambda i, k: i * n_features + k
     iy = lambda i: n_samples * n_features + i
@@ -277,8 +296,10 @@ def least_squares_gradient(n_samples: int, n_features: int, w_codes, f_w: int,
         residual = Polynomial()
         for k in range(n_features):
             residual = residual + w[k] * x[iX(i, k)]
+        if bias_code is not None:
+            residual = residual + 2 ** f_X * int(bias_code)
         residual = residual - 2 ** f_w * x[iy(i)]
-        g = g + residual * x[iX(i, j)]
+        g = g + (residual * 2 ** f_X if j == n_features else residual * x[iX(i, j)])
     return g
 
 

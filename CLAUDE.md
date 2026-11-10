@@ -23,7 +23,10 @@ everything. Daniel merges on GitHub himself — commit to a branch and push; do 
   `icc/` before then).
 - **Next task: linear and logistic regression trained by gradient descent under the scheme**
   (`docs/PLAN.md` Weeks 5–6). **Linear plan: `docs/GD_LINEAR_REGRESSION.md`** (branch
-  `gd-linear-regression`, stacked on `choose-q`); decisions D1–D4 settled 2026-10-21; Phase 1 (convergence across synthetic distributions, intercept, everything through the scheme) is §10, next step §10.9 step 1. Key
+  `gd-linear-regression`, stacked on `choose-q`); decisions D1–D4 settled 2026-10-21. **Phase 1 (convergence across synthetic
+  distributions, intercept, every run through the scheme) is IMPLEMENTED and tested (§10.10);
+  the full sweep (`tools/gd_sweep.py`, 145 runs, ~58 h estimated) has NOT been run — Daniel
+  will say when the laptop is set up to run unattended.** Phase 2 (leakage, §5) is next after. Key
   finding there: live GD publishes `ŵ_t` as query coefficients, a data-dependent channel
   Theorem 1 does not cover. Training is *live*: the client sends each gradient query based on
   the previous decoded result. Pieces already in place:
@@ -99,6 +102,13 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | `tools/quantization_study.py` | Seeded measurements behind `docs/QUANTIZATION.md`: entropy-bound validation, field-size budget, residue entropy, end-to-end decodability |
 | `tools/q_sweep.py` | The parameter sweep: phase timings vs `q` at fixed `m` (A), vs `λ` (B), quantisation formats end to end with CRT regime (a) alongside (C), verified field construction (D), Theorem 1 theory tables (T). Every timed cell must decode exactly. Run with `--jobs 1` for anything reported |
 | `tools/plot_sweep.py` | Figures from the sweep CSVs → `results/figures/fig*.pdf/.png`; feasibility thresholds are flags |
+| `icc/training.py` | Live GD through the scheme: `GDSchedule`, `run_gd`, `scheme_gradient`, `train_linear_regression(client, server, …)` — never sees plaintext |
+| `tools/synthetic_source.py` | Phase 1 distribution catalogue (CDFs by hand), exact pmfs, design `w*`/`b*`, exact Rényi entropies (+ brute-force twin) |
+| `tools/gd_reference.py` | Plaintext integer GD (bit-for-bit oracle), unencoded float GD, Jacobi eigen-solver, min-norm OLS, convergence metrics |
+| `tools/gd_setup.py` | Upload chain format → q → exact entropy → m → encode/store; design schedule (η with Marchenko–Pastur factor, T) |
+| `tools/gd_sweep.py` | Phase 1 sweep S1–S4 → `results/gd_sweep.csv` + `results/gd_traj/`; `--dry-run`, `--fast`, `--resume`, `--sweep` |
+| `tools/plot_gd.py` | Phase 1 figures → `results/figures/gd_fig*.pdf/.png` |
+| `tests/test_gd.py` | 38 Phase 1 checks (~2 s): bit-exact trajectories, intercept bound, exact entropies vs brute force |
 | `tools/crt_leakage_demo.py` | Brute-force proof that several encodings of the same data, each with `m` sized alone, reveal it; joint sizing does not |
 | `results/full_test_pre_entropy_fix.txt` | Full `test_icc.py` run before the Week 1 entropy fix (baseline) |
 | `results/full_test_post_fix.txt` | Full `test_icc.py` run after it |
@@ -154,6 +164,11 @@ Use the project venv (Python 3.11, `galois` + `numpy`). Run from the repo root:
 .venv/bin/python tools/q_sweep.py --exp C --resume   # continue after an interruption
 .venv/bin/python tools/plot_sweep.py                 # figures -> results/figures/
 .venv/bin/python tools/crt_leakage_demo.py           # multi-encoding leakage, ~10 s
+.venv/bin/python tests/test_gd.py                     # Phase 1 GD checks, ~2 s
+.venv/bin/python tools/gd_sweep.py --dry-run         # grid + estimated hours
+.venv/bin/python tools/gd_sweep.py --fast            # smoke run, ~10 min
+caffeinate -dimsu .venv/bin/python tools/gd_sweep.py --resume   # the real sweep, ~58 h
+.venv/bin/python tools/plot_gd.py [--suffix _fast]   # Phase 1 figures
 ```
 
 The full suite took ~81 min before the Week 1 pass and now takes ~9 s, so it is cheap to
