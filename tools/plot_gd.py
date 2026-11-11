@@ -66,6 +66,14 @@ def cell_of(r) -> str:
     return r["key"].rsplit("_s", 1)[0]
 
 
+def cell_sort(kv):
+    """Sort key for (cell, rows): by sweep, then family order and numbers, not as text"""
+    r = kv[1][0]
+    fam = FAMILY_ORDER.index(r["family"]) if r["family"] in FAMILY_ORDER else 99
+    return (r["sweep"], fam, float(r.get("rho") or 0), -int(r["n_s"]), int(r["P"]),
+            -float(r.get("snr") or 1), r.get("noise", ""))
+
+
 def by_cell(rows) -> dict:
     out = {}
     for r in rows:
@@ -234,7 +242,7 @@ def _dot_rows(ax, cells, fields, log=True, floor=None, miss_x=None, invert=True)
 
 def fig_plateau(rows, out):
     """3. Final suboptimality (the floor) per cell: what fixed point costs in accuracy."""
-    cells = sorted(by_cell(rows).items(), key=lambda kv: (kv[1][0]["sweep"], kv[0]))
+    cells = sorted(by_cell(rows).items(), key=cell_sort)
     if not cells:
         return
     fig, ax = plt.subplots(figsize=(6.4, 0.24 * len(cells) + 1.2))
@@ -247,14 +255,14 @@ def fig_plateau(rows, out):
                   "grey band: ≤ 1e-12, converged to floating-point precision")
     fig.legend(*ax.get_legend_handles_labels(), loc="upper center", ncol=3, frameon=False,
                bbox_to_anchor=(0.55, 0.0))
-    ax.set_title("Accuracy floor: the encoded run sits on the weight grid 2^-f_w",
-                 color=INK)
+    ax.set_title("Where each run ends: the encoded floor is the weight grid 2^-f_w or, for "
+                 "clipped skewed data, the data format", color=INK)
     save(fig, out, "gd_fig3_plateau")
 
 
 def fig_wallclock(rows, out, tols=("0.1", "0.01")):
     """4. Wall-clock to tolerance per cell, encoded (incl. setup) vs unencoded."""
-    cells = sorted(by_cell(rows).items(), key=lambda kv: (kv[1][0]["sweep"], kv[0]))
+    cells = sorted(by_cell(rows).items(), key=cell_sort)
     if not cells:
         return
     fig, axes = plt.subplots(1, len(tols), figsize=(4.4 * len(tols) + 1.4,
@@ -363,7 +371,7 @@ def fig_fw_floor(rows, ablation, out):
     cells = {}
     for a in ablation:
         cells.setdefault(a["key"].rsplit("_s", 1)[0], []).append(a)
-    order = sorted(cells.items(), key=lambda kv: (kv[1][0]["sweep"], kv[0]))
+    order = sorted(cells.items(), key=cell_sort)
     f_ws = sorted({a["f_w"] for a in ablation})
     fig, ax = plt.subplots(figsize=(6.8, 0.26 * len(order) + 1.4))
     labels = []
