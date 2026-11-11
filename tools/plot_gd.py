@@ -51,8 +51,8 @@ plt.rcParams.update({
 def save(fig, out: Path, name: str):
     """Writes a figure as PDF and PNG."""
     fig.tight_layout()
-    fig.savefig(out / f"{name}.pdf")
-    fig.savefig(out / f"{name}.png", dpi=150)
+    fig.savefig(out / f"{name}.pdf", bbox_inches="tight")   # keeps figure-level legends
+    fig.savefig(out / f"{name}.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  wrote {name}.pdf/.png")
 
@@ -111,7 +111,8 @@ def fig_curves(rows, traj_dir, out):
                     label="encoded (scheme)")
         ax.set_yscale("log")
         ax.set_title(fam, color=INK)
-        ax.axhline(1e-2, color=MUTED, lw=0.8, ls=":")
+        for tol in (1e-1, 1e-2):
+            ax.axhline(tol, color=MUTED, lw=0.8, ls=":")
     for ax in axes.ravel()[len(fams):]:
         ax.axis("off")
     for ax in axes[:, 0]:
@@ -120,41 +121,66 @@ def fig_curves(rows, traj_dir, out):
         ax.set_xlabel("step")
     axes[0][0].legend(loc="lower left", frameon=False)
     fig.suptitle(f"Suboptimality by feature distribution, (n_s, P) = ({s1[0]['n_s']}, "
-                 f"{s1[0]['P']}); median of seeds, seeds faint; dotted = 1e-2", fontsize=9,
+                 f"{s1[0]['P']}); median of seeds, seeds faint; dotted = 1e-1, 1e-2", fontsize=9,
                  color=INK)
     save(fig, out, "gd_fig1_curves_by_family")
 
 
-def fig_tau_vs_kappa(rows, out, tol="0.01"):
-    """2. Steps to tolerance vs sample condition number, every run, encoded vs unencoded."""
-    pts = [(r["kappa_sample"], r.get(f"tau_scheme_{tol}"), r.get(f"tau_float_{tol}"), r)
-           for r in rows if r.get("kappa_sample")]
-    if not pts:
-        return
-    fig, ax = plt.subplots(figsize=(6.4, 4.2))
+def _tau_panel(ax, pts, tol):
     k = np.array([p[0] for p in pts])
-    tf = [p[2] for p in pts]
     ts = [p[1] for p in pts]
-    reached_f = [i for i, v in enumerate(tf) if v is not None]
-    reached_s = [i for i, v in enumerate(ts) if v is not None]
-    ax.scatter(k[reached_f] * 0.97, [max(tf[i], 0.8) for i in reached_f], s=22, color=FLT,
-               edgecolor="white", linewidth=0.8, label="unencoded (float)", zorder=3)
-    ax.scatter(k[reached_s] * 1.03, [max(ts[i], 0.8) for i in reached_s], s=22, color=ENC,
-               edgecolor="white", linewidth=0.8, label="encoded (scheme)", zorder=3)
-    miss = [i for i, v in enumerate(ts) if v is None]
-    if miss:
-        top = max([v for v in ts + tf if v is not None] + [1]) * 1.6
-        ax.scatter(k[miss], [top] * len(miss), marker="^", s=24, color=ENC, alpha=0.6,
-                   label="encoded: not reached in T", zorder=3)
+    tf = [p[2] for p in pts]
+    top = max([v for v in ts + tf if v is not None] + [1]) * 2.5
+    for vals, color, dx, label in ((tf, FLT, 0.97, "unencoded (float)"),
+                                   (ts, ENC, 1.03, "encoded (scheme)")):
+        hit = [i for i, v in enumerate(vals) if v is not None]
+        ax.scatter(k[hit] * dx, [max(vals[i], 0.8) for i in hit], s=22, color=color,
+                   edgecolor="white", linewidth=0.8, label=label, zorder=3)
+        miss = [i for i, v in enumerate(vals) if v is None]
+        if miss:
+            ax.scatter(k[miss] * dx, [top] * len(miss), marker="^", s=26, facecolor="white",
+                       edgecolor=color, linewidth=1.2, zorder=3,
+                       label=f"{label.split(' ')[0]}: not reached within T")
     kk = np.geomspace(max(k.min(), 1), k.max() * 1.2, 50)
-    ax.plot(kk, kk * math.log(1 / float(tol)), color=MUTED, lw=1, ls="--",
-            label="κ · ln(1/tol)")
+    ax.plot(kk, kk * math.log(1 / tol), color=MUTED, lw=1, ls="--", label="κ · ln(1/tol)")
     ax.set_xscale("log")
     ax.set_yscale("log")
+    ax.set_ylim(0.6, top * 2.2)
     ax.set_xlabel("sample condition number κ of [X, 1]ᵀ[X, 1]")
-    ax.set_ylabel(f"steps to suboptimality ≤ {tol}")
-    ax.legend(frameon=False, loc="upper left")
-    ax.set_title("Convergence speed is set by conditioning, not by encoding", color=INK)
+    ax.set_ylabel(f"steps to suboptimality ≤ {tol:g}")
+    ax.set_title(f"tolerance {tol:g}", color=INK)
+
+
+def fig_tau_vs_kappa(rows, out, tols=("0.1", "0.01")):
+    """
+    2. Steps to tolerance vs sample condition number, every run, encoded vs unencoded.
+    Two tolerances: 1e-1 measures the descent alone; at 1e-2 the encoded run can sit on the
+    floor set by the weight grid 2^-f_w (figure 3), which is a format effect, not encoding.
+    """
+    fig, axes = plt.subplots(1, len(tols), figsize=(4.6 * len(tols), 4.2), sharey=True,
+                             squeeze=False)
+    any_pts = False
+    for ax, tol in zip(axes[0], tols):
+        pts = [(r["kappa_sample"], r.get(f"tau_scheme_{tol}"), r.get(f"tau_float_{tol}"))
+               for r in rows if r.get("kappa_sample")]
+        if pts:
+            any_pts = True
+            _tau_panel(ax, pts, float(tol))
+    if not any_pts:
+        plt.close(fig)
+        return
+    for ax in axes[0][1:]:
+        ax.set_ylabel("")
+    handles, labels = axes[0][0].get_legend_handles_labels()
+    for ax in axes[0][1:]:
+        for h, l in zip(*ax.get_legend_handles_labels()):
+            if l not in labels:
+                handles.append(h)
+                labels.append(l)
+    fig.legend(handles, labels, loc="upper center", ncol=len(labels), frameon=False,
+               bbox_to_anchor=(0.5, 0.0))
+    fig.suptitle("Steps to converge vs conditioning; hollow triangles = not reached within the "
+                 "run", fontsize=9, color=INK)
     save(fig, out, "gd_fig2_steps_vs_kappa")
 
 
@@ -170,20 +196,37 @@ def _cell_label(rs):
     return " ".join(parts)
 
 
-def _dot_rows(ax, cells, fields, log=True):
-    labels = []
+def _dot_rows(ax, cells, fields, log=True, floor=None, miss_x=None, invert=True):
+    """
+    One row per cell: seeds faint, median solid.
+
+    :param floor: Values below it are drawn at it (log axes cannot show 0)
+    :param miss_x: If given, a run with no value (tolerance not reached) is drawn there as a
+        hollow triangle; otherwise it is left out
+    :param invert: Put the first cell at the top (once per shared y axis)
+    """
+    labels, seen = [], set()
     for y, (cell, rs) in enumerate(cells):
         labels.append(_cell_label(rs))
-        for field, color, label in fields:
+        for f_i, (field, color, label) in enumerate(fields):
+            yy = y + (f_i - (len(fields) - 1) / 2) * 0.18   # equal values stay visible
             vals = [r[field] for r in rs if r.get(field) is not None]
+            if floor is not None:
+                vals = [max(v, floor) for v in vals]
+            n_miss = sum(1 for r in rs if r.get(field) is None)
+            if miss_x is not None and n_miss:
+                ax.scatter([miss_x] * n_miss, [yy] * n_miss, marker="^", s=26,
+                           facecolor="white", edgecolor=color, linewidth=1.2, zorder=3)
             if not vals:
                 continue
-            ax.scatter(vals, [y] * len(vals), s=12, color=color, alpha=0.4, linewidth=0)
-            ax.scatter([float(np.median(vals))], [y], s=36, color=color, edgecolor="white",
-                       linewidth=1.2, zorder=3, label=label if y == 0 else None)
+            ax.scatter(vals, [yy] * len(vals), s=12, color=color, alpha=0.4, linewidth=0)
+            ax.scatter([float(np.median(vals))], [yy], s=36, color=color, edgecolor="white",
+                       linewidth=1.2, zorder=3, label=label if label not in seen else None)
+            seen.add(label)
     ax.set_yticks(range(len(labels)))
     ax.set_yticklabels(labels)
-    ax.invert_yaxis()
+    if invert:
+        ax.invert_yaxis()
     if log:
         ax.set_xscale("log")
     ax.grid(axis="y", visible=False)
@@ -197,24 +240,38 @@ def fig_plateau(rows, out):
     fig, ax = plt.subplots(figsize=(6.4, 0.24 * len(cells) + 1.2))
     _dot_rows(ax, cells, [("plateau_float", FLT, "unencoded (float)"),
                           ("plateau_float_deq", DEQ, "float on quantised data"),
-                          ("plateau_scheme", ENC, "encoded (scheme)")])
-    ax.set_xlabel("suboptimality at the end of the run (median of last 10% of steps)")
-    ax.legend(frameon=False, loc="lower right")
-    ax.set_title("Accuracy floor: quantisation of the weights dominates", color=INK)
+                          ("plateau_scheme", ENC, "encoded (scheme)")], floor=1e-12)
+    ax.axvspan(1e-13, 1.5e-12, color="#e4e3df", lw=0, zorder=0)
+    ax.set_xlim(left=1e-13)
+    ax.set_xlabel("suboptimality at the end of the run (median of last 10% of steps)\n"
+                  "grey band: ≤ 1e-12, converged to floating-point precision")
+    fig.legend(*ax.get_legend_handles_labels(), loc="upper center", ncol=3, frameon=False,
+               bbox_to_anchor=(0.55, 0.0))
+    ax.set_title("Accuracy floor: the encoded run sits on the weight grid 2^-f_w",
+                 color=INK)
     save(fig, out, "gd_fig3_plateau")
 
 
-def fig_wallclock(rows, out, tol="0.01"):
+def fig_wallclock(rows, out, tols=("0.1", "0.01")):
     """4. Wall-clock to tolerance per cell, encoded (incl. setup) vs unencoded."""
     cells = sorted(by_cell(rows).items(), key=lambda kv: (kv[1][0]["sweep"], kv[0]))
     if not cells:
         return
-    fig, ax = plt.subplots(figsize=(6.4, 0.24 * len(cells) + 1.2))
-    _dot_rows(ax, cells, [(f"wall_float_{tol}", FLT, "unencoded (float)"),
-                          (f"wall_scheme_{tol}", ENC, "encoded: setup + steps")])
-    ax.set_xlabel(f"seconds to suboptimality ≤ {tol} (log scale)")
-    ax.legend(frameon=False, loc="lower right")
-    ax.set_title("Wall-clock to converge: the scheme's overhead", color=INK)
+    fig, axes = plt.subplots(1, len(tols), figsize=(4.4 * len(tols) + 1.4,
+                                                    0.24 * len(cells) + 1.4), sharey=True)
+    vals = [r[f"wall_{n}_{t}"] for r in rows for n in ("float", "scheme") for t in tols
+            if r.get(f"wall_{n}_{t}") is not None]
+    miss_x = max(vals) * 4 if vals else 1
+    for i, (ax, tol) in enumerate(zip(axes, tols)):
+        _dot_rows(ax, cells, [(f"wall_float_{tol}", FLT, "unencoded (float)"),
+                              (f"wall_scheme_{tol}", ENC, "encoded: setup + steps")],
+                  miss_x=miss_x, invert=i == 0)
+        ax.set_xlabel(f"seconds to suboptimality ≤ {float(tol):g}")
+        ax.set_title(f"tolerance {float(tol):g}", color=INK)
+    fig.legend(*axes[0].get_legend_handles_labels(), loc="upper center", ncol=2,
+               frameon=False, bbox_to_anchor=(0.5, 0.0))
+    fig.suptitle("Wall-clock to converge: the scheme's overhead (log scale; hollow triangle = "
+                 "not reached within the run)", fontsize=9, color=INK)
     save(fig, out, "gd_fig4_wallclock")
 
 
@@ -243,7 +300,7 @@ def fig_cost_by_family(rows, out):
     save(fig, out, "gd_fig5_cost_by_family")
 
 
-def fig_size_noise(rows, out, tol="0.01"):
+def fig_size_noise(rows, out, tol="0.1"):
     """6. Steps to tolerance across sizes (S3 + the S1 base) and across SNR (S4)."""
     size_rows = [r for r in rows if r["sweep"] == "S3"
                  or (r["sweep"] == "S1" and r["family"] in ("gauss", "exponential", "spiked"))]
@@ -251,34 +308,28 @@ def fig_size_noise(rows, out, tol="0.01"):
                   or (r["sweep"] == "S1" and r["family"] == "gauss")]
     if not size_rows and not noise_rows:
         return
-    fig, axes = plt.subplots(1, 2, figsize=(10, 3.4))
+    size_cells = sorted(by_cell(size_rows).items(),
+                        key=lambda kv: ((kv[1][0]["n_s"] * (kv[1][0]["P"] + 1)),
+                                        kv[1][0]["P"], kv[1][0]["family"]))
+    fig, axes = plt.subplots(1, 2, figsize=(10, max(3.4, 0.24 * len(size_cells) + 1.4)))
     ax = axes[0]
-    sizes = sorted({(r["n_s"], r["P"]) for r in size_rows}, key=lambda s: (s[1], -s[0]))
-    fams = [f for f in ("gauss", "exponential", "spiked") if any(r["family"] == f for r in size_rows)]
-    width = 0.8 / max(len(fams), 1)
-    for i, fam in enumerate(fams):
-        for j, s in enumerate(sizes):
-            for field, color, dx in ((f"tau_float_{tol}", FLT, -0.1), (f"tau_scheme_{tol}", ENC, 0.1)):
-                vals = [r[field] for r in size_rows if r["family"] == fam
-                        and (r["n_s"], r["P"]) == s and r.get(field) is not None]
-                if vals:
-                    x = j + (i - (len(fams) - 1) / 2) * width + dx * width
-                    ax.scatter([x] * len(vals), vals, s=12, color=color, alpha=0.5, linewidth=0)
-    ax.set_xticks(range(len(sizes)))
-    ax.set_xticklabels([f"({a},{b})\nn={a * (b + 1)}" for a, b in sizes])
-    ax.set_yscale("log")
-    ax.set_ylabel(f"steps to ≤ {tol}")
-    ax.set_title("By size (n_s, P); within each size, left to right: " + " / ".join(fams),
-                 color=INK)
-    ax.scatter([], [], color=ENC, label="encoded")
-    ax.scatter([], [], color=FLT, label="unencoded")
-    ax.legend(frameon=False)
+    if size_cells:
+        taus = [r[f] for r in size_rows for f in (f"tau_float_{tol}", f"tau_scheme_{tol}")
+                if r.get(f) is not None]
+        _dot_rows(ax, size_cells, [(f"tau_float_{tol}", FLT, "unencoded (float)"),
+                                   (f"tau_scheme_{tol}", ENC, "encoded (scheme)")],
+                  miss_x=max(taus + [1]) * 3)
+        ax.set_yticklabels([f"{rs[0]['family']} ({rs[0]['n_s']},{rs[0]['P']})  "
+                            f"n={rs[0]['n_s'] * (rs[0]['P'] + 1)}" for _, rs in size_cells])
+        ax.set_xlabel(f"steps to suboptimality ≤ {float(tol):g} (hollow = not reached)")
+        ax.legend(frameon=False, loc="lower right")
+    ax.set_title("By size (n_s, P), sorted by n = n_s(P+1) data symbols", color=INK)
 
     ax = axes[1]
     for noise, marker in (("gauss", "o"), ("laplace", "s")):
         for field, color in (("plateau_float", FLT), ("plateau_scheme", ENC)):
-            pts = [(r["snr"], r[field]) for r in noise_rows if r["noise"] == noise
-                   and r.get(field) is not None]
+            pts = [(r["snr"], max(r[field], 1e-12)) for r in noise_rows
+                   if r["noise"] == noise and r.get(field) is not None]
             if pts:
                 snrs = sorted({p[0] for p in pts})
                 med = [np.median([v for s, v in pts if s == x]) for x in snrs]
@@ -288,7 +339,7 @@ def fig_size_noise(rows, out, tol="0.01"):
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel("signal-to-noise ratio")
-    ax.set_ylabel("final suboptimality")
+    ax.set_ylabel("final suboptimality (clipped at 1e-12)")
     if noise_rows:
         ax.set_title(f"By label noise, Gaussian features ({noise_rows[0]['n_s']}, "
                      f"{noise_rows[0]['P']})", color=INK)
