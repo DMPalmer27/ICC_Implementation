@@ -35,6 +35,9 @@ Usage (reported timings: one run at a time, on AC power, lid open, under caffein
     caffeinate -dimsu .venv/bin/python tools/gd_sweep.py --resume       # continue
     .venv/bin/python tools/gd_sweep.py --fast                           # smoke run, minutes
     .venv/bin/python tools/gd_sweep.py --sweep S1 --seeds 1             # one sweep, one seed
+    caffeinate -dimsu .venv/bin/python tools/gd_sweep.py --order coverage --resume
+        # first seed of every cell (cheapest first), then the remaining seeds cheapest-first;
+        # an interruption at any point leaves every cell covered before any gets a 2nd seed
 """
 
 import _path  # noqa: F401  -- puts icc/ on sys.path; must precede the local imports
@@ -238,6 +241,34 @@ def measure_run(run: dict, steps_override=None, traj_dir: Path = None) -> dict:
     return row
 
 
+def estimate_run_seconds(run: dict, cache: dict = None) -> float:
+    """:return: Estimated seconds for one run (design T x modelled step cost + setup)"""
+    cache = {} if cache is None else cache
+    cell = run_key(dict(run, seed=0))
+    if cell not in cache:
+        spec = source_of(run)
+        sch, _ = design_schedule(spec)
+        plan = plan_context(spec)
+        cache[cell] = sch.steps * estimate_step_seconds(plan["lam"], spec.n_samples,
+                                                         spec.n_features) + 10
+    return cache[cell]
+
+
+def coverage_order(runs: list) -> list:
+    """
+    Execution order for a sweep that may be cut short. Seed 0 of every cell runs first,
+    cheapest cell first; later seeds follow by (seed + 1) x estimated cost, so cheap cells
+    collect seeds while expensive ones wait. Only the order changes: every run keeps its own
+    seed, so results are identical to the grid order.
+
+    :param runs: Runs from build_grid
+    :return: The same runs, reordered
+    """
+    cache = {}
+    return sorted(runs, key=lambda r: (int(r["seed"]) > 0,
+                                       (int(r["seed"]) + 1) * estimate_run_seconds(r, cache)))
+
+
 def dry_run(runs: list):
     """Prints the grid with T, m, lambda and an estimated duration, without uploading."""
     print(f"{'sweep':5} {'family':12} {'rho':>4} {'(n_s,P)':>8} {'snr':>5} {'noise':7} "
@@ -273,6 +304,9 @@ def main():
                              "any that slept, errored or came out WRONG")
     parser.add_argument("--dry-run", action="store_true", help="print the grid and estimate")
     parser.add_argument("--out", default=str(RESULTS), help="output directory")
+    parser.add_argument("--order", choices=("grid", "coverage"), default="grid",
+                        help="grid: cell by cell; coverage: one seed of every cell first, "
+                             "cheapest first (for a run that may be cut short)")
     args = parser.parse_args()
 
     runs = build_grid(args.fast, args.seeds)
@@ -296,6 +330,8 @@ def main():
                 if r["status"] == "ok":
                     done[r["key"]] = r
     todo = [r for r in runs if run_key(r) not in done]
+    if args.order == "coverage":
+        todo = coverage_order(todo)
     print(f"{len(todo)} of {len(runs)} runs to do; power: {power_source()}", flush=True)
     if power_source() == "battery":
         print("  WARNING: on battery. Timings will not be comparable; plug in for reported "

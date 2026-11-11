@@ -167,7 +167,7 @@ Use the project venv (Python 3.11, `galois` + `numpy`). Run from the repo root:
 .venv/bin/python tests/test_gd.py                     # Phase 1 GD checks, ~2 s
 .venv/bin/python tools/gd_sweep.py --dry-run         # grid + estimated hours
 .venv/bin/python tools/gd_sweep.py --fast            # smoke run, ~10 min
-caffeinate -dimsu .venv/bin/python tools/gd_sweep.py --resume   # the real sweep, ~58 h
+caffeinate -dimsu .venv/bin/python tools/gd_sweep.py --order coverage --resume   # real sweep, ~58 h; every cell covered by ~11.7 h
 .venv/bin/python tools/plot_gd.py [--suffix _fast]   # Phase 1 figures
 ```
 
