@@ -131,7 +131,7 @@ def fig_curves(rows, traj_dir, out):
     fig.suptitle(f"Suboptimality by feature distribution, (n_s, P) = ({s1[0]['n_s']}, "
                  f"{s1[0]['P']}); median of seeds, seeds faint; dotted = 1e-1, 1e-2", fontsize=9,
                  color=INK)
-    save(fig, out, "gd_fig1_curves_by_family")
+    save(fig, out, "fig1_curves_by_family")
 
 
 def _tau_panel(ax, pts, tol):
@@ -189,7 +189,7 @@ def fig_tau_vs_kappa(rows, out, tols=("0.1", "0.01")):
                bbox_to_anchor=(0.5, 0.0))
     fig.suptitle("Steps to converge vs conditioning; hollow triangles = not reached within the "
                  "run", fontsize=9, color=INK)
-    save(fig, out, "gd_fig2_steps_vs_kappa")
+    save(fig, out, "fig2_steps_vs_kappa")
 
 
 def _cell_label(rs):
@@ -257,7 +257,7 @@ def fig_plateau(rows, out):
                bbox_to_anchor=(0.55, 0.0))
     ax.set_title("Where each run ends: the encoded floor is the weight grid 2^-f_w or, for "
                  "clipped skewed data, the data format", color=INK)
-    save(fig, out, "gd_fig3_plateau")
+    save(fig, out, "fig3_plateau")
 
 
 def fig_wallclock(rows, out, tols=("0.1", "0.01")):
@@ -280,7 +280,7 @@ def fig_wallclock(rows, out, tols=("0.1", "0.01")):
                frameon=False, bbox_to_anchor=(0.5, 0.0))
     fig.suptitle("Wall-clock to converge: the scheme's overhead (log scale; hollow triangle = "
                  "not reached within the run)", fontsize=9, color=INK)
-    save(fig, out, "gd_fig4_wallclock")
+    save(fig, out, "fig4_wallclock")
 
 
 def fig_cost_by_family(rows, out):
@@ -305,7 +305,7 @@ def fig_cost_by_family(rows, out):
     axes[0].invert_yaxis()
     fig.suptitle(f"Cost of protecting each distribution at ({s1[0]['n_s']}, {s1[0]['P']}): "
                  f"lower entropy h → larger key m → more workers", fontsize=9, color=INK)
-    save(fig, out, "gd_fig5_cost_by_family")
+    save(fig, out, "fig5_cost_by_family")
 
 
 def fig_size_noise(rows, out, tol="0.1"):
@@ -352,7 +352,7 @@ def fig_size_noise(rows, out, tol="0.1"):
         ax.set_title(f"By label noise, Gaussian features ({noise_rows[0]['n_s']}, "
                      f"{noise_rows[0]['P']})", color=INK)
     ax.legend(frameon=False, fontsize=7)
-    save(fig, out, "gd_fig6_size_noise")
+    save(fig, out, "fig6_size_noise")
 
 
 FW_RAMP = ("#a9c8f0", "#6aa1e6", "#2a78d6", "#174a8c")   # one hue, light -> dark = more bits
@@ -406,7 +406,7 @@ def fig_fw_floor(rows, ablation, out):
     if cost:
         fig.text(0.5, -0.07, f"Cost at (25, 3) gauss — {cost}  (native field ends at "
                  f"log2 q ≈ 31.5)", ha="center", fontsize=7, color=MUTED)
-    save(fig, out, "gd_fig7_fw_floor")
+    save(fig, out, "fig7_fw_floor")
 
 
 def main():
@@ -419,7 +419,7 @@ def main():
     if not rows:
         print("no ok rows to plot")
         return
-    out = res / f"figures{args.suffix}"
+    out = res / f"figures{args.suffix}" / "gd_phase1"
     out.mkdir(parents=True, exist_ok=True)
     traj_dir = res / f"gd_traj{args.suffix}"
     print(f"{len(rows)} runs -> {out}")

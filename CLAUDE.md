@@ -14,7 +14,7 @@ Timeline: started Jan 2026 as an independent study; the Spring 2026 report
 everything. Daniel merges on GitHub himself — commit to a branch and push; do not open PRs.
 
 - **Done:** server-side overflow gate (`icc/query.py`), seeding fix, parameter sweep
-  (`docs/Q_SWEEP.md`, figs in `results/figures/`; reviewed and well received). Answer: a big `q`
+  (`docs/Q_SWEEP.md`, figs in `results/figures/q_sweep/`; reviewed and well received). Answer: a big `q`
   costs a one-time ×4.5 jump at the native limit, then is flat; single prime is feasible for all
   formats up to `n = 100`.
 - **Decided:** stay with a single prime; `q > NATIVE_Q_MAX` is allowed with the existing
@@ -53,7 +53,7 @@ everything. Daniel merges on GitHub himself — commit to a branch and push; do 
   "re-upload with a larger budget", which leaks — `docs/Q_SWEEP.md` §6.3; awaiting Daniel's OK);
   optional `SystemContext.from_budget` (q → entropy bounds → m in one place, useful for GD);
   whether to keep the field-native toy setups in `test_icc.py` (recommended: keep); untracked
-  smoke outputs `results/*_fast*`, `results/figures_fast/` (scratch, safe to delete).
+  smoke outputs (`--fast`) are scratch: `results/*_fast*`, `results/figures_fast/`, untracked.
 - **Open questions for Raviv:** `docs/PLAN.md` open questions 1–9, known issue 1 below (`ε_c`
   exponent), and `docs/CRT_PROOF.md` / `docs/Q_SWEEP.md` §6.4.
 
@@ -101,14 +101,14 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | `tools/extract_pdf_text.py` | Extracts `Written_Resources/*.pdf` to `extracted/*.txt` so citations are checkable |
 | `tools/quantization_study.py` | Seeded measurements behind `docs/QUANTIZATION.md`: entropy-bound validation, field-size budget, residue entropy, end-to-end decodability |
 | `tools/q_sweep.py` | The parameter sweep: phase timings vs `q` at fixed `m` (A), vs `λ` (B), quantisation formats end to end with CRT regime (a) alongside (C), verified field construction (D), Theorem 1 theory tables (T). Every timed cell must decode exactly. Run with `--jobs 1` for anything reported |
-| `tools/plot_sweep.py` | Figures from the sweep CSVs → `results/figures/fig*.pdf/.png`; feasibility thresholds are flags |
+| `tools/plot_sweep.py` | Figures from the sweep CSVs → `results/figures/q_sweep/fig*.pdf/.png`; feasibility thresholds are flags |
 | `icc/training.py` | Live GD through the scheme: `GDSchedule`, `run_gd`, `scheme_gradient`, `train_linear_regression(client, server, …)` — never sees plaintext |
 | `tools/synthetic_source.py` | Phase 1 distribution catalogue (CDFs by hand), exact pmfs, design `w*`/`b*`, exact Rényi entropies (+ brute-force twin) |
 | `tools/gd_reference.py` | Plaintext integer GD (bit-for-bit oracle), unencoded float GD, Jacobi eigen-solver, min-norm OLS, convergence metrics |
 | `tools/gd_setup.py` | Upload chain format → q → exact entropy → m → encode/store; design schedule (η with Marchenko–Pastur factor, T) |
 | `tools/gd_sweep.py` | Phase 1 sweep S1–S4 → `results/gd_sweep.csv` + `results/gd_traj/`; `--dry-run`, `--fast`, `--resume`, `--sweep` |
 | `tools/gd_fw_ablation.py` | Encoded floor vs weight bits `f_w` ∈ {4,6,8,10}: reruns each finished sweep run's dataset through plaintext integer GD (bit-identical to the scheme; f_w = 4 is checked against the sweep) |
-| `tools/plot_gd.py` | Phase 1 figures → `results/figures/gd_fig*.pdf/.png` |
+| `tools/plot_gd.py` | Phase 1 figures → `results/figures/gd_phase1/fig*.pdf/.png` |
 | `tests/test_gd.py` | 38 Phase 1 checks (~2 s): bit-exact trajectories, intercept bound, exact entropies vs brute force |
 | `tools/crt_leakage_demo.py` | Brute-force proof that several encodings of the same data, each with `m` sized alone, reveal it; joint sizing does not |
 | `results/full_test_pre_entropy_fix.txt` | Full `test_icc.py` run before the Week 1 entropy fix (baseline) |
@@ -163,7 +163,7 @@ Use the project venv (Python 3.11, `galois` + `numpy`). Run from the repo root:
 .venv/bin/python tools/extract_pdf_text.py          # refresh Written_Resources/extracted/
 .venv/bin/python tools/q_sweep.py --exp all          # parameter sweep; hours; keep --jobs 1
 .venv/bin/python tools/q_sweep.py --exp C --resume   # continue after an interruption
-.venv/bin/python tools/plot_sweep.py                 # figures -> results/figures/
+.venv/bin/python tools/plot_sweep.py                 # figures -> results/figures/q_sweep/
 .venv/bin/python tools/crt_leakage_demo.py           # multi-encoding leakage, ~10 s
 .venv/bin/python tests/test_gd.py                     # Phase 1 GD checks, ~2 s
 .venv/bin/python tools/gd_sweep.py --dry-run         # grid + estimated hours

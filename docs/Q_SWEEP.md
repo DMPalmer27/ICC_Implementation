@@ -1,7 +1,7 @@
 # Parameter sweep: does a massive `q` make the scheme infeasible?
 
 Week of 2026-10-12. Raw data `results/q_sweep_*.csv`, machine `results/q_sweep_machine.json`,
-log `results/q_sweep_log.txt`, figures `results/figures/fig*.pdf`. Regenerate with
+log `results/q_sweep_log.txt`, figures `results/figures/q_sweep/fig*.pdf`. Regenerate with
 
 ```bash
 .venv/bin/python tools/q_sweep.py --exp all          # sequential; several hours, dominated by C

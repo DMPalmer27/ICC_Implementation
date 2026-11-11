@@ -326,7 +326,7 @@ def main():
                         help="feasible if setup (once per upload) takes at most this long")
     args = parser.parse_args()
 
-    out = RESULTS / f"figures{args.suffix}"
+    out = RESULTS / f"figures{args.suffix}" / "q_sweep"
     out.mkdir(parents=True, exist_ok=True)
     s = args.suffix
     rows = {e: load(RESULTS / f"q_sweep_{e}{s}.csv") for e in "TABCD"}

@@ -20,7 +20,7 @@ Description: How the encoded run's accuracy floor depends on the weight format f
 
 Usage (after the sweep; plaintext and light, but keep it off the timed sweep):
     .venv/bin/python tools/gd_fw_ablation.py
-    .venv/bin/python tools/plot_gd.py          # adds gd_fig7_fw_floor
+    .venv/bin/python tools/plot_gd.py          # adds fig7_fw_floor
 """
 
 import _path  # noqa: F401  -- puts icc/ on sys.path; must precede the local imports

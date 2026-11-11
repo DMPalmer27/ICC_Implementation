@@ -419,7 +419,7 @@ New files only. `icc/` keeps depending on nothing but `galois` and `numpy`.
 | `tools/gd_setup.py` | `upload_context(format, source, seeds)`: the §4.2 chain in one place |
 | `tools/gd_experiment.py` | E1–E7, each one seeded and writing CSV to `results/gd_*.csv` plus a printed report to `results/gd_*.txt`; `--fast`; `--exp` |
 | `tools/gd_sweep.py` | Phase 1 distribution sweep S1–S4 (§10.6), resumable |
-| `tools/plot_gd.py` | §10.7 figures, loss curves, the leakage-vs-`m` CDF, leakage vs `t`; PDF and PNG into `results/figures/` |
+| `tools/plot_gd.py` | §10.7 figures, loss curves, the leakage-vs-`m` CDF, leakage vs `t`; PDF and PNG into `results/figures/gd_phase1/` |
 | `tests/test_gd.py` | the §7 checks; a fast subset is also added to `tests/test_regression.py` |
 
 Seeds: one `np.random.SeedSequence` per run, spawned into the named streams `data`, `G`, `key`,
@@ -694,7 +694,7 @@ Phase 1 is implemented and tested. Only the full sweep itself remains to be run.
 | `tools/gd_reference.py` | plaintext integer GD (the bit-for-bit oracle), float GD (the unencoded baseline), a Jacobi eigen-solver, the minimum-norm least-squares solve, and the metrics |
 | `tools/gd_setup.py` | the §4.2 upload chain, and the design schedule (`η`, `T`) |
 | `tools/gd_sweep.py` | the S1–S4 driver. `--dry-run`, `--fast`, `--resume`, `--sweep`, `--seeds` |
-| `tools/plot_gd.py` | figures 1–6 into `results/figures/gd_fig*.pdf/.png` |
+| `tools/plot_gd.py` | figures 1–7 into `results/figures/gd_phase1/fig*.pdf/.png` |
 | `tests/test_gd.py` | 38 checks, about 2 s |
 
 **Changes from §10.4–10.6 made during implementation:**
