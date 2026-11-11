@@ -64,12 +64,12 @@ def field_for(q: int):
     return _FIELDS[q]
 
 
-def specs_for(spec: SourceSpec):
-    """:return: (x_spec, w_spec, b_spec) of the Phase 1 format"""
-    return spec.x_spec, FixedPointSpec(F_W, CLIP_W), FixedPointSpec(F_W, CLIP_B)
+def specs_for(spec: SourceSpec, f_w: int = F_W):
+    """:return: (x_spec, w_spec, b_spec) of the Phase 1 format (f_w varies only in ablations)"""
+    return spec.x_spec, FixedPointSpec(f_w, CLIP_W), FixedPointSpec(f_w, CLIP_B)
 
 
-def design_schedule(spec: SourceSpec, steps: Optional[int] = None) -> tuple:
+def design_schedule(spec: SourceSpec, steps: Optional[int] = None, f_w: int = F_W) -> tuple:
     """
     The public schedule, from the population design only (section 10.4):
 
@@ -86,26 +86,28 @@ def design_schedule(spec: SourceSpec, steps: Optional[int] = None) -> tuple:
 
     :param spec: Source
     :param steps: Override T (smoke runs)
+    :param f_w: Weight fractional bits (ablations only; the sweep uses F_W)
     :return: (GDSchedule, dict with kappa_pop, lam_max_pop, lam_min_pop, spread, T_design)
     """
     kappa, lam_max, lam_min = condition_number(spec.augmented_hessian())
     spread = (1 + math.sqrt((spec.n_features + 1) / spec.n_samples)) ** 2
     T = min(max(T_MIN, math.ceil(3 * kappa * spread * math.log(1 / TOL_MIN))), T_CAP)
-    x_spec, w_spec, b_spec = specs_for(spec)
+    x_spec, w_spec, b_spec = specs_for(spec, f_w)
     schedule = GDSchedule(eta=1.0 / (lam_max * spread), steps=steps or T, w_spec=w_spec,
                           f_X=spec.f_X, b_spec=b_spec)
     return schedule, dict(kappa_pop=kappa, lam_max_pop=lam_max, lam_min_pop=lam_min,
                           spread=spread, T_design=T)
 
 
-def plan_context(spec: SourceSpec, entropy: Optional[EntropyResult] = None) -> dict:
+def plan_context(spec: SourceSpec, entropy: Optional[EntropyResult] = None,
+                 f_w: int = F_W) -> dict:
     """
     q, m, lambda and eps_c for a source without uploading anything -- used by --dry-run.
 
     :return: dict with q, log2_q, budget B, entropy, H_p_X, max_H, m, lam, eps_c (both
         exponents of known issue 1), h, m_source, ctx
     """
-    x_spec, w_spec, b_spec = specs_for(spec)
+    x_spec, w_spec, b_spec = specs_for(spec, f_w)
     budget = QueryBudget(spec.n_samples, spec.n_features, DEGREE, x_spec, w_spec,
                          b_spec=b_spec)
     choice = choose_field_size(budget.magnitude_bound(), warn_native=False)

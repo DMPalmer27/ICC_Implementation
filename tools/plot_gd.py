@@ -347,6 +347,60 @@ def fig_size_noise(rows, out, tol="0.1"):
     save(fig, out, "gd_fig6_size_noise")
 
 
+FW_RAMP = ("#a9c8f0", "#6aa1e6", "#2a78d6", "#174a8c")   # one hue, light -> dark = more bits
+
+
+def fig_fw_floor(rows, ablation, out):
+    """
+    7. The encoded floor vs the weight format f_w (tools/gd_fw_ablation.py, plaintext integer
+    GD, bit-identical to the scheme at f_w = 4). Two floors: the weight grid 2^-f_w, which
+    more bits lowers, and the data's own quantisation and clipping (float GD on the stored
+    codes, green), which no choice of f_w can beat.
+    """
+    if not ablation:
+        return
+    deq = {r["key"]: r.get("plateau_float_deq") for r in rows}
+    cells = {}
+    for a in ablation:
+        cells.setdefault(a["key"].rsplit("_s", 1)[0], []).append(a)
+    order = sorted(cells.items(), key=lambda kv: (kv[1][0]["sweep"], kv[0]))
+    f_ws = sorted({a["f_w"] for a in ablation})
+    fig, ax = plt.subplots(figsize=(6.8, 0.26 * len(order) + 1.4))
+    labels = []
+    for y, (cell, rs) in enumerate(order):
+        labels.append(_cell_label(rs))
+        for i, f_w in enumerate(f_ws):
+            vals = [max(a["plateau"], 1e-12) for a in rs if a["f_w"] == f_w]
+            if vals:
+                ax.scatter([float(np.median(vals))], [y], s=34, color=FW_RAMP[i % 4],
+                           edgecolor="white", linewidth=1, zorder=3,
+                           label=f"encoded, f_w = {f_w}" if y == 0 else None)
+        dq = [max(deq[a["key"]], 1e-12) for a in rs if a["f_w"] == f_ws[0]
+              and deq.get(a["key"]) is not None]
+        if dq:
+            ax.scatter([float(np.median(dq))], [y], marker="|", s=140, color=DEQ,
+                       linewidth=2, zorder=2,
+                       label="data floor: float GD on the stored codes" if y == 0 else None)
+    ax.set_yticks(range(len(labels)))
+    ax.set_yticklabels(labels)
+    ax.invert_yaxis()
+    ax.set_xscale("log")
+    ax.grid(axis="y", visible=False)
+    ax.set_xlabel("suboptimality at the end of the run (median over seeds)")
+    base = [a for a in ablation if a["family"] == "gauss" and a["sweep"] == "S1"]
+    cost = "; ".join(f"f_w={f}: log2 q {np.median([a['log2_q'] for a in base if a['f_w'] == f]):.1f}"
+                     f", λ {int(np.median([a['lam'] for a in base if a['f_w'] == f])):,}"
+                     for f in f_ws) if base else ""
+    ax.set_title("Encoded floor vs weight bits f_w (plaintext integer GD = the scheme, "
+                 "bit for bit)", color=INK)
+    fig.legend(*ax.get_legend_handles_labels(), loc="upper center", ncol=3, frameon=False,
+               bbox_to_anchor=(0.5, 0.0), fontsize=7)
+    if cost:
+        fig.text(0.5, -0.07, f"Cost at (25, 3) gauss — {cost}  (native field ends at "
+                 f"log2 q ≈ 31.5)", ha="center", fontsize=7, color=MUTED)
+    save(fig, out, "gd_fig7_fw_floor")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Phase 1 GD figures")
     parser.add_argument("--suffix", default="", help="'_fast' for the smoke run")
@@ -367,6 +421,9 @@ def main():
     fig_wallclock(rows, out)
     fig_cost_by_family(rows, out)
     fig_size_noise(rows, out)
+    abl = res / f"gd_fw_ablation{args.suffix}.csv"
+    if abl.exists():
+        fig_fw_floor(rows, load(abl), out)
 
 
 if __name__ == "__main__":

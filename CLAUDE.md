@@ -107,6 +107,7 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | `tools/gd_reference.py` | Plaintext integer GD (bit-for-bit oracle), unencoded float GD, Jacobi eigen-solver, min-norm OLS, convergence metrics |
 | `tools/gd_setup.py` | Upload chain format → q → exact entropy → m → encode/store; design schedule (η with Marchenko–Pastur factor, T) |
 | `tools/gd_sweep.py` | Phase 1 sweep S1–S4 → `results/gd_sweep.csv` + `results/gd_traj/`; `--dry-run`, `--fast`, `--resume`, `--sweep` |
+| `tools/gd_fw_ablation.py` | Encoded floor vs weight bits `f_w` ∈ {4,6,8,10}: reruns each finished sweep run's dataset through plaintext integer GD (bit-identical to the scheme; f_w = 4 is checked against the sweep) |
 | `tools/plot_gd.py` | Phase 1 figures → `results/figures/gd_fig*.pdf/.png` |
 | `tests/test_gd.py` | 38 Phase 1 checks (~2 s): bit-exact trajectories, intercept bound, exact entropies vs brute force |
 | `tools/crt_leakage_demo.py` | Brute-force proof that several encodings of the same data, each with `m` sized alone, reveal it; joint sizing does not |
@@ -168,6 +169,7 @@ Use the project venv (Python 3.11, `galois` + `numpy`). Run from the repo root:
 .venv/bin/python tools/gd_sweep.py --dry-run         # grid + estimated hours
 .venv/bin/python tools/gd_sweep.py --fast            # smoke run, ~10 min
 caffeinate -dimsu .venv/bin/python tools/gd_sweep.py --order coverage --resume   # real sweep, ~58 h; every cell covered by ~11.7 h
+.venv/bin/python tools/gd_fw_ablation.py           # floor vs f_w, plaintext, after the sweep (~min)
 .venv/bin/python tools/plot_gd.py [--suffix _fast]   # Phase 1 figures
 ```
 
