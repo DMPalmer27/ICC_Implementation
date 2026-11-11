@@ -1,0 +1,10 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "python": "3.11.9",
+  "numpy": "2.3.5",
+  "galois": "0.4.10",
+  "cpu_count": 12,
+  "cpu": "Apple M2 Pro",
+  "mem_bytes": "17179869184"
+}
