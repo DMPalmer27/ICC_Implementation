@@ -324,8 +324,15 @@ def get_information_set(q: int, m: int, d: int) -> list[tuple[int, ...]]:
     Generates the core combinatorial tuples for Reed-Muller RM_q(d, m).
     Used as evaluation points by the Server and as polynomial exponents by the Client.
 
-    This gives explicit description of I d,m information set given in Section IV Definition 3 of 2024 paper
-    using a dfs approach to prune so that not every option is visited
+    This gives explicit description of I d,m information set given in Section IV Definition 3 of 2024 paper.
+
+    Each tuple of total degree s <= d is a multiset of s coordinates, so the set is
+    enumerated directly as combinations_with_replacement(range(m), s), dropping any tuple
+    with an entry above q - 1, and then sorted. The sort reproduces exactly the order of the
+    depth-first search this replaced (lexicographic, smaller values first), which the
+    Server's evaluation points and the Client's exponents both rely on. The DFS recursed
+    once per coordinate, so it hit Python's recursion limit at m ~ 990 (degree-1 inference
+    at diabetes size needs m ~ 2,200), and it rebuilt a tuple at every level.
 
     Results are memoised because the set depends only on (q, m, d) and is rebuilt on every
     decode_result() and every store_data(). The returned list is shared between callers, so
@@ -334,19 +341,17 @@ def get_information_set(q: int, m: int, d: int) -> list[tuple[int, ...]]:
     :param q: Field (alphabet) size
     :param m: Number of variables
     :param d: Max total degree
-    :return: All m-tuples with entries in [0, q-1] such that sum(a_i) <= d
+    :return: All m-tuples with entries in [0, q-1] such that sum(a_i) <= d, in lexicographic order
     """
     results = []
-
-    def recurse(depth: int, current: tuple, remaining_budget: int):
-        if depth == m:
-            results.append(current)
-            return
-        # Never exceed remaining_budget — prunes entire subtrees immediately
-        for val in range(min(q, remaining_budget + 1)):
-            recurse(depth + 1, current + (val,), remaining_budget - val)
-
-    recurse(0, (), d)
+    for s in range(d + 1):
+        for support in itertools.combinations_with_replacement(range(m), s):
+            a = [0] * m
+            for i in support:
+                a[i] += 1
+            if s == 0 or max(a) <= q - 1:
+                results.append(tuple(a))
+    results.sort()
     return results
 
 def get_information_superset(GF: type[galois.FieldArray], q: int, m: int, d: int, S: int) -> list[galois.FieldArray]:

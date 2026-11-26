@@ -573,6 +573,75 @@ def gradient_bound_data_dependent(x_codes, y_codes, w_spec: FixedPointSpec) -> i
     return int(max((per_sample * X[:, j]).sum() for j in range(X.shape[1])))
 
 
+def score_bound_worst_case(n_features: int, x_spec: FixedPointSpec, w_spec: FixedPointSpec,
+                           b_spec: Optional[FixedPointSpec] = None) -> int:
+    """
+    Hard bound on the integer score of a linear model on one stored row (inference, d = 1).
+
+    The score query of query.linear_score is
+
+        z_i = sum_j wq[j] * xq[i, j]  +  2^{f_X} * bq
+
+    at the common scale 2^{f_X + f_w}, so from the clip bounds alone
+
+        |z_i| <= P * Xmax * Wmax  +  2^{f_X} * Bmax.
+
+    It is one row, not a sum over n_s samples, and one factor of the data, not two: that is
+    the whole difference from gradient_bound_worst_case, and why q is so much smaller for
+    inference. It equals query.check_query's bound for a query with every |wq[j]| at Wmax
+    and |bq| at Bmax, so the server accepts every query this budget covers.
+
+    Like the gradient bound it uses only the public format, so choosing q from it leaks
+    nothing. The model is public too (its weights are the query's coefficients), so w_spec
+    may be sized to the model itself; it is still a CEILING fixed before upload.
+
+    :param n_features: Number of features P (the length of one row)
+    :param x_spec: Format the feature matrix is stored in
+    :param w_spec: Ceiling on the weight format
+    :param b_spec: Ceiling on the intercept's format, or None for no intercept; its f must
+        equal w_spec.f so the constant term lands on the same scale
+    :return: Hard bound B on |z_i|
+    """
+    bound = n_features * x_spec.max_int * w_spec.max_int
+    if b_spec is None:
+        return bound
+    if b_spec.f != w_spec.f:
+        raise ValueError(
+            f"the intercept must share the weights' fractional bits (f_b == f_w) so the "
+            f"score has one scale; got f_b = {b_spec.f}, f_w = {w_spec.f}"
+        )
+    return bound + 2 ** x_spec.f * b_spec.max_int
+
+
+@dataclass(frozen=True)
+class ScoreBudget:
+    """
+    The inference counterpart of QueryBudget: what must be committed to before upload when
+    every future query is a linear score w . x_i + b on one stored row (degree d = 1).
+
+    Same ordering constraint as QueryBudget -- q, then m, then the shares, all frozen at
+    upload -- but the declared query class is degree 1, so the shares are built for
+    RM_q(1, m) and lambda = m + 1. A logistic or softmax model uses the same budget: the
+    server returns the score and the client applies the link after decoding.
+
+    :param n_features: Number of features P
+    :param x_spec: Format the feature matrix is stored in
+    :param w_spec: Ceiling on the weight format of any future model
+    :param b_spec: Ceiling on the intercept's format, or None for no intercept
+    """
+    n_features: int
+    x_spec: FixedPointSpec
+    w_spec: FixedPointSpec
+    b_spec: Optional[FixedPointSpec] = None
+    d: int = 1
+
+    def magnitude_bound(self) -> int:
+        """
+        :return: Bound B on every admitted score, suitable for choose_field_size
+        """
+        return score_bound_worst_case(self.n_features, self.x_spec, self.w_spec, self.b_spec)
+
+
 def symbol_entropy_lower_bits(spec: FixedPointSpec,
                               sup_density: float = SUP_DENSITY_STANDARD_NORMAL,
                               saturation_mass: Optional[float] = None) -> float:

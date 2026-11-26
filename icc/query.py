@@ -303,6 +303,39 @@ def least_squares_gradient(n_samples: int, n_features: int, w_codes, f_w: int,
     return g
 
 
+def linear_score(row: int, n_features: int, w_codes, bias_code: Optional[int] = None,
+                 f_X: Optional[int] = None) -> Polynomial:
+    """
+    Builds the inference query: the score of a linear model on stored row `row`,
+
+        z_i(x) = sum_j w_j * x[i P + j]  +  2^{f_X} * b
+
+    with the data laid out as the flattened feature matrix, row-major (n = n_rows * P). It
+    has degree 1 in the data, so it needs shares of degree d = 1 and only lambda = m + 1
+    workers. Every term sits at the scale 2^{f_X + f_w}: the weights carry f_w fractional
+    bits and the data f_X, and the intercept code (at f_w) is lifted by the public 2^{f_X}.
+
+    The weights are public coefficients. This is safe for inference because the model is
+    fixed before any query is sent and was not fitted on the stored rows, so the query does
+    not depend on the stored data (docs/INFERENCE.md section 2).
+
+    :param row: Stored row i
+    :param n_features: Number of features P
+    :param w_codes: Quantised weight vector, integer codes, length P
+    :param bias_code: Quantised intercept at the weights' f_w, or None for no intercept
+    :param f_X: Fractional bits of the stored data; required with an intercept
+    :return: The query polynomial
+    """
+    if bias_code is not None and f_X is None:
+        raise ValueError("an intercept needs f_X: its constant term is 2^{f_X} * bias_code")
+    if len(w_codes) != n_features:
+        raise ValueError(f"expected {n_features} weights, got {len(w_codes)}")
+    terms = {(row * n_features + j,): int(w) for j, w in enumerate(w_codes)}
+    if bias_code is not None:
+        terms[()] = 2 ** f_X * int(bias_code)
+    return Polynomial(terms)
+
+
 class QueryStatus(Enum):
     """
     Outcome of the server's pre-dispatch check. Anything but OK means the workers were never
