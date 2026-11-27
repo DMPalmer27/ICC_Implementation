@@ -4,7 +4,8 @@
 % Every number in the text is a macro from generated/numbers.tex; re-run those two scripts
 % after any change to the results instead of editing numbers by hand.
 %
-% Comments starting "% RAVIV:" mark points that need his ruling before submission.
+% Comments starting "% RAVIV:" mark points that need his ruling before submission;
+% "% DANIEL:" marks choices of framing for the author.
 
 \documentclass[conference]{IEEEtran}
 \IEEEoverridecommandlockouts
@@ -23,15 +24,15 @@
 \newtheorem{observation}{Observation}
 \newtheorem{proposition}{Proposition}
 \theoremstyle{remark}
-\newtheorem{remark}{Remark}
+\newtheorem{example}{Example}
 
 \newcommand{\F}{\mathbb{F}}
 \newcommand{\xt}{\tilde{x}}
+\newcommand{\Xt}{\tilde{X}}
 \newcommand{\xh}{\hat{x}}
 \newcommand{\wh}{\hat{w}}
 \newcommand{\bh}{\hat{b}}
 \newcommand{\clip}{\operatorname{clip}}
-\newcommand{\todo}[1]{\textcolor{red}{[#1]}}
 
 \begin{document}
 
@@ -47,276 +48,329 @@ Washington University in St.\ Louis}}
 \begin{abstract}
 Individual Confidential Computing (ICC) lets a client store non-uniformly distributed data
 with an untrusted provider and later have the provider evaluate low-degree polynomials of
-it, while no $r$ of the stored values leak more than a negligible amount of information to
-the provider as a whole. We study ICC in an inference setting: the data are stored once, a
-linear, logistic or softmax model trained elsewhere is applied to every stored row, and the
-requests are independent of the data. We show that this setting inherits the scheme's
-guarantee unchanged, that the model's scores are degree-one queries whose fixed-point
-encoding yields an explicit field size and an explicit error bound, and that degree one
-keeps the number of workers linear in the data size. In \NRuns{} end-to-end runs covering
-\NScores{} scores over eleven synthetic sources, a grid of fixed-point formats, and two
-real datasets, every score decoded exactly to its integer value and the measured error
-never exceeded the analytic bound. Without clipping, task metrics matched the floating-point
-model to within $10^{-3}$ in $R^2$ and one decision per hundred rows; the larger
-deviations all came from clipping heavy-tailed features, which the bound predicts and the
-client controls by the choice of clip. On the
-diabetes dataset the scheme reaches $R^2=\RDiabScheme$ against $\RDiabFloat$ in floating
-point, and on wine an accuracy of $\RWineScheme$ against $\RWineFloat$, using
-$\RDiabLam$ and $\RWineLam$ workers respectively. At the same data size, a degree-two
-gradient query, as training would need, requires $\CRatio\times$ more workers.
+it, while the provider as a whole learns at most a negligible amount about any $r$ of the
+stored values. We study ICC for inference: the data are stored once, and a linear,
+logistic or softmax model trained elsewhere scores every stored row, with requests that do
+not depend on the data. We show that such requests add no leakage to the storage
+guarantee, that each score is a degree-one query, and that a fixed-point encoding of the
+data and the model gives an explicit field size, under which every score decodes exactly,
+and an explicit bound on the error against the floating-point model. In \NRuns{}
+end-to-end runs (\NScores{} scores over eleven synthetic sources, a grid of fixed-point
+formats and two real datasets) every score decoded exactly and the measured error never
+exceeded the bound. Without clipped features the scheme matched the floating-point model
+to within $10^{-3}$ in $R^2$ and one decision in a hundred; all larger deviations came from
+features clipped at $\pm4\sigma$, which the bound predicts and a wider clip removes. On
+diabetes the scheme reaches $R^2=\RDiabScheme$ against $\RDiabFloat$ in floating point, and
+on wine an accuracy of $\RWineScheme$ against $\RWineFloat$. Degree one keeps the number of
+workers linear in the data: at diabetes size, a degree-two training query would need
+$\CRatio\times$ more.
 \end{abstract}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Introduction}
 
 A client who stores data with a cloud provider would like the provider to compute on it
-without learning it. Homomorphic encryption achieves this computationally
-\cite{cryptonets2016}; coded computing achieves information-theoretic guarantees by
-spreading encoded data over many workers \cite{yu2019lcc}. The perfect subset privacy
-line of work \cite{raviv2022,deng2024} asks for less than full secrecy and gets more
-efficiency in return: no $r$-subset of the data may be learned by the provider as a whole,
-admin and workers together. Individual Confidential Computing (ICC) \cite{icc2025} removes
-the remaining requirement that the data be uniform, replacing zero leakage by a negligible
-leakage $\varepsilon_c$ through distribution smoothing \cite{pathegama2024}.
+without learning it. Homomorphic encryption does this under computational assumptions
+\cite{cryptonets2016}. Coded computing gives information-theoretic guarantees
+\cite{yu2019lcc}, but traditionally against a bounded number of colluding workers, with the
+provider's administrator trusted. Deng, Ramkumar and Raviv \cite{deng2024} moved the
+privacy barrier to the provider as a whole, administrator and workers together, using
+$r$-subset privacy \cite{raviv2022}: no $r$ stored values may leak anything. Their scheme
+needs uniformly distributed data. Individual Confidential Computing (ICC) \cite{icc2025}
+removes that requirement by smoothing the data with a random linear code
+\cite{pathegama2024}, at the price of a negligible leakage $\varepsilon_c$ instead of zero.
 
-Earlier work on this implementation found that real-valued data can be carried into the
-finite field by a fixed-point encoding with a hard no-wraparound guarantee. This paper asks
-where that makes ICC useful today. Iterative training is not yet covered: in gradient
-descent each query depends on the previous decoded gradient, so the query coefficients form
-a data-dependent channel outside the theorem. \emph{Inference} is covered. A model trained
-elsewhere is public, its scores on stored rows are fixed in advance, and each score is a
-degree-one polynomial of the stored data.
+Machine-learning data are real-valued, so using ICC requires carrying reals into the
+finite field. A fixed-point encoding does this with a hard guarantee that no result wraps
+around modulo $q$. This paper asks where the resulting system is useful today.
+
+Training by gradient descent is not covered yet. Each gradient query is built from the
+previous decoded gradient, so the model weights, which the provider sees as query
+coefficients, are a function of the data, a channel outside the ICC theorem.
+\emph{Inference} is covered. A model trained elsewhere is public, the set of scores to
+compute is fixed in advance, and each score is a degree-one polynomial of the stored data.
+Information-theoretic private inference has also been studied for quantized models
+\cite{raviv2022quantized,deng2023approximate,deng2023private}; here the data are stored once
+with a single untrusted provider, and the model is public.
+% DANIEL: read [raviv2022quantized, deng2023approximate, deng2023private] and sharpen this
+% sentence into a one-line comparison of settings.
 
 \textbf{Contributions.}
 \begin{itemize}
-\item We state the conditions under which inference adds no leakage beyond the ICC storage
-      guarantee (Section~\ref{sec:setting}): a model not fitted on the stored rows,
-      preprocessing statistics taken from training rows, and non-adaptive requests.
+\item We state when inference adds no leakage beyond the ICC storage guarantee
+      (Section~\ref{sec:setting}): the model and every public parameter come from data
+      independent of the stored rows, and the requests are fixed in advance.
 \item We give the fixed-point encoding of linear, logistic and softmax scores, the field
-      size that rules out wraparound, and a deterministic bound on the score error
+      size that rules out wraparound, and a deterministic bound on the error of every score
       (Section~\ref{sec:encoding}).
-\item We measure the full pipeline end to end on synthetic sources with exact entropies, on
-      a grid of formats, and on two real datasets (Sections~\ref{sec:setup}
-      and~\ref{sec:results}), and compare its cost with the degree-two query training would
-      need.
+\item We measure the whole pipeline end to end on synthetic sources with exact entropies,
+      a grid of formats and two real datasets (Sections~\ref{sec:setup}
+      and~\ref{sec:results}), and compare its cost with that of a training query.
 \end{itemize}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{The ICC scheme}\label{sec:icc}
 
-The client holds $x\in\F_q^n$ drawn from an unknown, non-uniform distribution. To store it,
-the client draws a key $k\sim\mathrm{Unif}(\F_q^m)$ and a random matrix
-$G\in\F_q^{m\times n}$, uploads $\xt = x + kG$ together with $G$, and keeps only $k$
-\cite{icc2025}. The provider's admin gives one worker the share $\xt - tG$ for each $t$ in
-an information set $I_{d,m}$ of the Reed--Muller code $\mathrm{RM}_q(d,m)$; there are
-$\lambda=|I_{d,m}|=\binom{m+d}{d}$ workers when $d<q$ \cite{deng2024}. To evaluate a
-polynomial $f$ of total degree at most $d$, each worker returns $f(\xt-tG)$. The function
-$g(t)\triangleq f(\xt-tG)$ is a polynomial of degree at most $d$ in $t$, so the client
-interpolates it from the $\lambda$ returns and outputs $g(k)=f(x)$.
+The client holds $x\in\F_q^n$, drawn from an unknown, non-uniform distribution.
 
-\textbf{Key length.} Let $H_p$ denote R\'enyi entropy of order $p\ge2$ in base $q$.
-Theorem~1 of \cite{icc2025} guarantees $I(X_R;\xt)\le\varepsilon_c$ for every
-$R\subseteq[n]$, $|R|=r$, with probability at least $1-1/a$ over $G$, provided
+\textbf{Storage.} The client draws a key $k\sim\mathrm{Unif}(\F_q^m)$ and a uniformly random
+matrix $G\in\F_q^{m\times n}$, uploads $\xt=x+kG$ and $G$, and keeps only $k$
+\cite{icc2025}. The administrator gives one worker the share $\xt-tG$ for every $t$ in the
+information set
+\[
+I_{d,m}=\{t\in\{0,\dots,q-1\}^m:\textstyle\sum_i t_i\le d\}
+\]
+of the Reed--Muller code $\mathrm{RM}_q(d,m)$, where $d$ is the largest degree any future
+query may have \cite{deng2024}. There are $\lambda=|I_{d,m}|=\binom{m+d}{d}$ workers when
+$d<q$. We use this straggler-free form of the scheme.
+
+\textbf{Computation.} To evaluate a polynomial $f$ of total degree at most $d$, every
+worker returns $f(\xt-tG)$ and the administrator forwards the $\lambda$ values. The
+function $g(t)\triangleq f(\xt-tG)$ is a polynomial of degree at most $d$ in $t$, and
+$g(k)=f(\xt-kG)=f(x)$. Because $I_{d,m}$ is an information set, the $\lambda$ values
+determine $g$; the client interpolates it and evaluates it at its key.
+
+At $d=1$ this is especially simple. The information set is $\{0,e_1,\dots,e_m\}$, $g$ is
+affine, and $g(k)=g(0)+\sum_j k_j\,(g(e_j)-g(0))$: decoding is $m$ multiply-adds.
+
+\begin{example}
+Let $q=31$, $n=2$, $m=1$, $x=(3,5)$, $G=(2,7)$ and $k=3$. The client uploads
+$\xt=x+3G=(9,26)$. For $f(x)=x_1+2x_2$, worker $t=0$ returns $f(9,26)=61\equiv30$ and worker
+$t=1$ returns $f(\xt-G)=f(7,19)=45\equiv14$. The client computes
+$g(3)=30+3\,(14-30)=-18\equiv13=f(x)$.
+\end{example}
+
+\textbf{Key length.} Let $H_p$ be the R\'enyi entropy of order $p\ge2$ in base $q$, so that
+$H_p(X)\le n$ with equality for uniform data. Theorem~1 of \cite{icc2025} states that if
 \begin{equation}\label{eq:m}
-m \ge n + p + \log_q(1/\varepsilon) - H_p(X) + \max_{R} H_p(X_R),
+m \ge n + p + \log_q(1/\varepsilon) - H_p(X) + \max_{|R|=r} H_p(X_R),
 \end{equation}
-where $\varepsilon$ is the smoothing budget and
-$\varepsilon_c=\tfrac{p}{p-1}\log_q\!\big(1+a\,2^{(2p-1)/p}(1+q^{-\max_R H_p(X_R)})\varepsilon^{1/p}\big)$.
+then with probability at least $1-1/a$ over $G$, $I(X_R;\Xt)\le\varepsilon_c$ for every
+set $R$ of $r$ positions, where $\varepsilon$ is the smoothing budget and
+\[
+\varepsilon_c=\tfrac{p}{p-1}\log_q\!\big(1+a\,2^{(2p-1)/p}(1+q^{-\max_R H_p(X_R)})\,\varepsilon^{1/p}\big).
+\]
 % RAVIV: known issue 1 -- the derivation at eqs. (9)-(10) of [icc2025] carries
 % q^{-max_R H_p(X_R)/p}. We report both; they agree to the digits shown (EpsCAltMax).
-The more entropy the data carry, the shorter the key: writing $h=H_p(X)/n$, the key length
-is roughly $m\approx n(1-h)$.
+% RAVIV: eq. (5)(a) of [icc2025] needs m >= n + p + log_q(1/eps) - min_{R,z} H_p(X | X_R = z),
+% and Appendix B proves min_{R,z} H_p(X|X_R=z) <= H_p(X) - max_R H_p(X_R), i.e. that this
+% requirement is AT LEAST the theorem's bound, not at most. For independent coordinates the
+% two are equal (all synthetic i.i.d. runs); for correlated data the stated bound may fall
+% short. We use the theorem as stated.
+Writing $h=H_p(X)/n$ for the entropy per stored value, \eqref{eq:m} gives $m\approx n(1-h)$: the more entropy
+the data carry, the shorter the key.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Inference setting}\label{sec:setting}
 
-The client stores $N$ rows of $P$ features, $n=NP$ values, once. A model with $K$ outputs,
+The client stores $N$ rows of $P$ features once, so $n=NP$. A model with $K$ outputs,
 weights $W\in\mathbb{R}^{K\times P}$ and intercepts $b\in\mathbb{R}^K$, has been trained
-elsewhere ($K=1$ for linear and binary logistic regression, $K$ classes for softmax). For
-every stored row $i$ and output $c$ the client wants the score
-$z_{ic}=w_c^\top x_i+b_c$; the link (identity, sigmoid or softmax) is applied by the client
-after decoding, so it never needs to be a polynomial. The model is public: its weights are
-the coefficients of the query polynomial the provider evaluates.
+elsewhere: $K=1$ for linear and binary logistic regression, and $K$ is the number of
+classes for softmax regression. For every stored row $i$ and output $c$ the client wants
+the score $z_{ic}=w_c^\top x_i+b_c$. The link (identity, sigmoid or softmax) is applied by
+the client after decoding, so it never has to be a polynomial. The model is public: its
+weights are the coefficients of the query the provider evaluates.
 
 \begin{observation}\label{obs:inference}
-Suppose the query polynomials $f_1,\dots,f_Q$ are independent of $(X,k)$. Then the
-provider's view after answering all of them satisfies
-$I(X_R;\text{view})=I(X_R;\xt,G)\le\varepsilon_c$.
+Fix a $G$ for which Theorem~1 holds. If the queries $f_1,\dots,f_Q$ are independent of
+$(X,k)$, the provider's view after answering all of them satisfies
+$I(X_R;\text{view})=I(X_R;\Xt)\le\varepsilon_c$ for every $R$.
 \end{observation}
 \begin{proof}
-Every worker output $f_j(\xt-tG)$ is a deterministic function of $(\xt,G,f_j)$, so the
-view is a function of $(\xt,G,f_1,\dots,f_Q)$. Since $(f_1,\dots,f_Q)$ is independent of
-$(X,\xt,G)$, the chain rule gives $I(X_R;\xt,G,f_{1:Q})=I(X_R;\xt,G)$.
+The view is $\Xt$, the public $G$, the queries, and the workers' outputs. Each output
+$f_j(\Xt-tG)$ is a function of $\Xt$ and $f_j$, and so is the administrator's decision to
+accept or refuse $f_j$. Hence
+$I(X_R;\text{view})=I(X_R;\Xt,f_{1:Q})=I(X_R;\Xt)+I(X_R;f_{1:Q}\mid\Xt)$. Since $\Xt$ is a
+function of $(X,k)$ and $f_{1:Q}$ is independent of $(X,k)$, the last term is zero.
 \end{proof}
-% RAVIV: this is the data-processing argument we discussed; no new lemma intended.
+% RAVIV: the data-processing argument we discussed; no new lemma intended.
 
-Three rules make the hypothesis hold in practice:
+Three rules make the hypothesis hold:
 \begin{enumerate}
-\item the model is not fitted on the stored rows (we use a train/store split, or fresh
-      synthetic draws);
-\item preprocessing statistics, such as standardisation means and deviations, are
-      computed on the training rows only;
-\item the requests are not adaptive: which rows are scored, and by which model, is fixed
-      before any result is decoded.
+\item the model is fitted on rows independent of the stored rows (a train/store split, or
+      fresh synthetic draws);
+\item every other public quantity (standardisation statistics, the clip, the field size
+      $q$, the key length $m$) is computed from the training rows or from the public format
+      only;
+\item the requests are fixed in advance: which rows are scored, and by which model, does
+      not depend on any decoded result.
 \end{enumerate}
-Live gradient descent violates the third rule, which is why it is left to future work.
+Gradient descent breaks the third rule.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Fixed-point encoding of scores}\label{sec:encoding}
 
-\textbf{Codes.} A feature is clipped to $[-A_X,A_X]$ and stored as the integer
-$\xh=\mathrm{round}(2^{f_X}\clip(x))$, mapped into $\F_q$ by its balanced representative.
-Weights and intercepts are coded with $f_w$ fractional bits,
-$\wh=\mathrm{round}(2^{f_w}w)$, $\bh=\mathrm{round}(2^{f_w}b)$, with public clips $A_w,A_b$
-covering the model. The query for row $i$ and output $c$ is
+\textbf{Codes.} A feature, standardised with training statistics, is clipped to
+$[-A_X,A_X]$ and stored as the integer $\xh=\mathrm{round}(2^{f_X}\clip(x))$; the integer
+enters $\F_q$ as its residue modulo the prime $q$. Weights and intercepts get $f_w$
+fractional bits, $\wh=\mathrm{round}(2^{f_w}w)$ and $\bh=\mathrm{round}(2^{f_w}b)$, with
+public bounds $A_w,A_b$ chosen as powers of two that cover the model, so the model is never
+clipped. Integer-only inference of this kind is standard for efficient deployment
+\cite{jacob2018}; here it is also what lets the scores live in $\F_q$. The query for row $i$ and output $c$ is
 \begin{equation}\label{eq:query}
-\hat z_{ic}=\sum_{j=1}^{P}\wh_{cj}\,\xh_{ij}+2^{f_X}\,\bh_c ,
+\hat z_{ic}=\sum_{j=1}^{P}\wh_{cj}\,\xh_{ij}+2^{f_X}\,\bh_c .
 \end{equation}
-a degree-one polynomial in the stored values with public integer coefficients, equal to
-$2^{f_X+f_w}$ times the dequantised score. One upload serves every row and output.
+It has degree one in the stored values and public integer coefficients, and equals
+$2^{f_X+f_w}$ times the score of the quantised model on the quantised row. The factor
+$2^{f_X}$ puts the intercept on the same scale as the products.
 
-\textbf{Field size.} Decoding returns $\hat z_{ic}\bmod q$; it equals the integer
-$\hat z_{ic}$ whenever $|\hat z_{ic}|\le (q-1)/2$. With
-$\hat X_{\max}=2^{f_X}A_X$, $\hat W_{\max}=2^{f_w}A_w$, $\hat B_{\max}=2^{f_w}A_b$,
+\textbf{Field size.} Decoding returns $\hat z_{ic}\bmod q$. Read as an integer in
+$[-(q-1)/2,(q-1)/2]$, it equals $\hat z_{ic}$ whenever $|\hat z_{ic}|\le(q-1)/2$. With
+$\hat X_{\max}=2^{f_X}A_X$, $\hat W_{\max}=2^{f_w}A_w$ and $\hat B_{\max}=2^{f_w}A_b$,
 \begin{equation}\label{eq:B}
 |\hat z_{ic}|\le B\triangleq P\,\hat X_{\max}\hat W_{\max}+2^{f_X}\hat B_{\max},
 \end{equation}
-so any prime $q>2B$ guarantees an exact integer. The provider checks this bound before
-dispatching a query and refuses otherwise. For $P=10$, $f_X=f_w=8$, $A_X=4$, $A_w=2$,
-$A_b=1$, $B\approx5.3\times10^6$ and $q\approx2^{23.3}$.
+so any prime $q\ge2B+1$ makes every score exact. The bound uses only public quantities, so
+choosing $q$ from it reveals nothing. Before dispatching a query, the administrator computes
+its worst case from its own coefficients, $\sum_j|\wh_{cj}|\hat X_{\max}+2^{f_X}|\bh_c|$, and
+refuses the query if that exceeds $(q-1)/2$; every model within the bounds
+of~\eqref{eq:B} passes. For example,
+$P=10$, $f_X=f_w=8$, $A_X=4$, $A_w=2$ and $A_b=1$ give
+$B=10\cdot1024\cdot512+256\cdot256\approx5.3\times10^6$ and $q\approx2^{23.3}$.
 
 \begin{proposition}[score error]\label{prop:err}
 Let $z=w^\top x+b$ be the floating-point score and $z_{\mathrm{s}}=\hat z/2^{f_X+f_w}$ the
-decoded one. Then
+decoded one. If $A_w$ and $A_b$ cover the model, then
 \begin{multline*}
 |z_{\mathrm{s}}-z|\le\sum_j|w_j|\big(|x_j-\clip(x_j)|+2^{-f_X-1}\big)\\
 +2^{-f_w-1}\textstyle\sum_j|\clip(x_j)|+P\,2^{-f_X-f_w-2}+2^{-f_w-1}.
 \end{multline*}
 \end{proposition}
 \begin{proof}
-Write $\xh_j/2^{f_X}=\clip(x_j)+\delta_j$ and $\wh_j/2^{f_w}=w_j+\gamma_j$ with
-$|\delta_j|\le2^{-f_X-1}$, $|\gamma_j|\le2^{-f_w-1}$, and likewise $\gamma_b$ for the
-intercept. Expanding, $z_{\mathrm{s}}-z=\sum_j[w_j(\clip(x_j)-x_j)+w_j\delta_j+\gamma_j
-\clip(x_j)+\gamma_j\delta_j]+\gamma_b$, and the triangle inequality gives the claim. Since
-decoding is exact, no other error source exists.
+Write $\xh_j/2^{f_X}=\clip(x_j)+\delta_j$ and $\wh_j/2^{f_w}=w_j+\gamma_j$ with rounding
+errors $|\delta_j|\le2^{-f_X-1}$ and $|\gamma_j|\le2^{-f_w-1}$, and similarly
+$\bh/2^{f_w}=b+\gamma_b$. Since decoding is exact,
+$z_{\mathrm{s}}=\sum_j(w_j+\gamma_j)(\clip(x_j)+\delta_j)+b+\gamma_b$, so
+$z_{\mathrm{s}}-z=\sum_j[w_j(\clip(x_j)-x_j)+w_j\delta_j+\gamma_j\clip(x_j)+\gamma_j\delta_j]
++\gamma_b$. The triangle inequality gives the claim.
 \end{proof}
 
-The first term is the clipping error; it vanishes unless a feature lies outside
-$\pm A_X$. All other terms halve with every extra fractional bit. For classification, a
-decision (sign or argmax) can change only for rows whose floating-point margin is within
-the bound of a tie.
+The first term is the clipping error, which vanishes unless a feature lies outside
+$\pm A_X$. Every other term at least halves with each extra fractional bit. A decision
+(sign or argmax) can change only on rows whose floating-point margin to a tie is smaller
+than the bound (twice the bound for argmax).
 
-\textbf{Entropy and key length at degree one.} The field is sized by the product of data
-and weight magnitudes, so $\log_2 q$ grows with $f_w$, while the entropy of the stored codes
-depends on the data alone. For a standard Gaussian at $f_X=8$, $A_X=4$, the order-2 entropy
+\textbf{Field size against key length.} The field is sized by the product of data and
+weight magnitudes, so $\log_2q$ grows with $f_X+f_w$, while the entropy of the stored codes
+grows only with $f_X$. For a standard Gaussian at $f_X=8$ and $A_X=4$, the order-2 entropy
 is about $9.8$ bits per code against $\log_2 q\approx22$, so $h\approx0.45$ and
-$m\approx0.55\,n$. The gain in exactness from a larger $f_w$ is paid for in key length.
+$m\approx0.55\,n$. Extra weight bits buy accuracy and cost key length.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Experimental setup}\label{sec:setup}
 
 Every run uploads the stored rows through the scheme, sends one query~\eqref{eq:query} per
 row and output, decodes all scores with a single interpolation, and compares every decoded
-integer with the plaintext integer oracle. Privacy settings are $r=5$, $p=2$,
-$\varepsilon=10^{-6}$, $a=5$. The implementation uses \texttt{galois} \cite{galois} and
-scikit-learn \cite{sklearn}; all runs are seeded and their raw output is saved.
+integer with the same integer computed in plaintext. The privacy parameters are $r=5$,
+$p=2$, $\varepsilon=10^{-6}$ and $a=5$. The implementation uses \texttt{galois}
+\cite{galois} and scikit-learn \cite{sklearn}. Every run is seeded and its raw output is
+saved.
 
 \textbf{Synthetic sources (S).} Nine i.i.d.\ feature families (Gaussian, uniform, bimodal,
 three-point discrete, Laplace, Student-$t_3$, spiked, exponential, lognormal) and
-equicorrelated Gaussians with $\rho\in\{0.5,0.9\}$; tasks linear, logistic and three-class
-softmax; $P\in\{2,5,10,20\}$; $N=100$ stored rows; $f_X=f_w=8$, $A_X=4\sigma$; three seeds,
-\NSRuns{} runs. Models are fitted on 2{,}000 independent training rows (least squares, or
-$L_2$-regularised logistic regression). For i.i.d.\ sources $H_p(X)$ and
-$\max_R H_p(X_R)$ are computed exactly from the code distribution; for correlated sources
-we use a min-entropy lower bound on $H_p(X)$ and the model-free upper bound
-$\max_R H_p(X_R)\le r\log_q(\text{levels})$.
+equicorrelated Gaussians with $\rho\in\{0.5,0.9\}$; $P\in\{2,5,10,20\}$; $N=100$ stored
+rows; $f_X=f_w=8$ and $A_X=4\sigma$; three seeds; \NSRuns{} runs. Labels come from a fixed
+true model: for linear regression $y=w^{*\top}x+b^*+e$ with signal-to-noise ratio 4, and for
+logistic and three-class softmax regression labels are drawn from logits $2.5\,u^\top x$
+along unit-variance directions $u$. Models are fitted on 2{,}000 independent training rows,
+by least squares or by $L_2$-regularised logistic regression. For i.i.d.\ sources $H_p(X)$
+and $\max_R H_p(X_R)$ are computed exactly from the distribution of the codes. For the
+correlated sources we use a min-entropy lower bound on $H_p(X)$ from the known joint
+density, and the upper bound $\max_R H_p(X_R)\le r\log_q(\text{number of code
+values})$, which holds for any distribution.
 
 \textbf{Formats (F).} $f_X,f_w\in\{2,4,\dots,12\}$ on Gaussian and lognormal features,
-linear and logistic, $P=10$, $N=50$, two seeds (\NFRuns{} runs).
+linear and logistic regression, $P=10$, $N=50$, two seeds (\NFRuns{} runs).
 
-\textbf{Cost (C).} Gaussian linear model, $P=10$, $N$ from 10 to 442 (the size of the
-diabetes data), with the degree-two training plan for the same data computed alongside.
+\textbf{Cost (C).} Gaussian features, linear model, $P=10$, $N$ from 10 to 442 (the size of
+the diabetes data). Alongside each run we compute, without uploading, the parameters a
+degree-two least-squares gradient query would need on the same rows and their labels, at
+the training format $f_X=8$, $f_w=4$.
 
 \textbf{Real data (R).} Diabetes \cite{efron2004lars} (442 rows, 10 features, regression)
-and wine \cite{uciwine} (178 rows, 13 features, 3 classes), each shuffled with a public seed
-and split in half: the model is fitted and standardisation statistics are computed on the
-first half, and the second half is stored and scored. Formats
+and wine \cite{uciwine} (178 rows, 13 features, 3 classes). Each is shuffled with a public
+seed and split in half. The model and the standardisation statistics come from the first
+half, and the second half (\RDiabN{} and \RWineN{} rows) is stored and scored. Formats
 $f_X,f_w\in\{4,6,8\}$ and $A_X\in\{4\sigma,8\sigma\}$ (\NRRuns{} runs).
 
 \textbf{Real-data entropy (provisional).} Real features are correlated, and R\'enyi entropy
 of order $p\ge2$ is not subadditive, so a sum of per-feature entropies bounds $H_p(X)$ in
-neither direction. We lower-bound the entropy of a stored row by its min-entropy,
-$\sum_j \min(f_X,b_j)-\log_2\rho_{\max}$, where $\rho_{\max}$ is the peak of a Gaussian
-density fitted to the training half, $b_j=\log_2(\sigma_j/s_j)$ caps the bits of a
-feature recorded on a grid of step $s_j$, and discrete features are credited zero bits.
+neither direction. We bound the entropy of a stored row from below by its min-entropy,
+$\sum_j\min(f_X,b_j)-\log_2\rho_{\max}$ bits. Here the sum runs over continuous features,
+$\rho_{\max}$ is the peak of a Gaussian density fitted to the training half (within each
+value of the discrete features, taking the largest), and $b_j=\log_2(\sigma_j/s_j)$ caps
+the bits of a feature recorded on a grid of step $s_j$. Discrete features are credited zero
+bits, and stored rows are independent, so $H_p(X)$ is at least $N$ times the row bound. The
+bound on $\max_R H_p(X_R)$ is the distribution-free one above.
 % RAVIV: the Gaussian rho_max is a model, not a guarantee. Needs a ruling (CLAUDE.md
 % known issues 2-3; docs/INFERENCE.md section 6).
-This bound is provisional: the Gaussian peak is a modelling assumption.
+This bound is provisional, because the Gaussian peak is a modelling assumption.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Results}\label{sec:results}
 
 \subsection{Exactness and the error bound}
 
-All \NExactRuns{} of \NRuns{} runs decoded every score exactly to its integer value, over
-\NScores{} scores in total. Fig.~\ref{fig:bound} compares the measured error with
-Proposition~\ref{prop:err}: there were \NViolations{} violations. Without clipping, the
-largest score error was $\SMaxErrClean$ and at most $\SMaxErrOverBoundClean$ of the bound
-(the mean error is $\SMeanErrOverBoundClean$ of the mean bound). In the \SNClippedRuns{}
-synthetic runs where some feature fell outside $\pm4\sigma$, the clipping term dominates
-and the bound is nearly tight. The largest error, $\SMaxErrClipped$, came from two
-Student-$t_3$ values far outside the clip; on the rows of every run with no clipped feature
-the error stayed below $\SMaxErrUnclippedRows$.
+All \NExactRuns{} runs decoded every score exactly to its integer value, \NScores{} scores
+in total. The measured error never exceeded the bound of Proposition~\ref{prop:err}
+(\NViolations{} violations; Fig.~\ref{fig:bound}). In runs without a clipped feature, the
+largest error was $\SMaxErrClean$, at most $\SMaxErrOverBoundClean$ of its bound and
+$\SMeanErrOverBoundClean$ of it on average. In the \SNClippedRuns{} synthetic runs where
+some feature fell outside $\pm4\sigma$, the clipping term dominates and the error comes
+close to the bound. The largest error, $\SMaxErrClipped$, came from two Student-$t_3$ values
+far outside the clip; on every row without a clipped feature the error stayed at or below
+$\SMaxErrUnclippedRows$.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{fig2_error_vs_bound}
-\caption{Measured maximum score error against the bound of
-Proposition~\ref{prop:err}, one point per synthetic run.}
+\caption{Largest score error of each synthetic run against the largest bound of
+Proposition~\ref{prop:err}. The line marks error equal to bound.}
 \label{fig:bound}
 \end{figure}
 
 \subsection{Task metrics across sources}
 
 Fig.~\ref{fig:metrics} plots each run's metric through the scheme against the
-floating-point model. In runs with no clipped feature the largest gap was
-$\SMaxGapLinClean$ in $R^2$ (\SNCleanLin{} linear runs) and $\SMaxGapLogClean$ and
-$\SMaxGapSoftClean$ in accuracy for logistic and softmax, that is, at most one of 100
-decisions. With clipping the gaps reach $\SMaxGapLin$ in $R^2$ (Student-$t_3$),
-$\SMaxGapLog$ and $\SMaxGapSoft$ in accuracy: the heavy-tailed and skewed sources
-(Laplace, Student-$t_3$, exponential, lognormal, spiked) put values beyond $4\sigma$, and a
-$4\sigma$ clip is the wrong choice for them. Decisions flipped on
-\SFlipsLog{} of \SDecisionsLog{} logistic rows and \SFlipsSoft{} of \SDecisionsSoft{}
-softmax rows, and every flip occurred on a row the bound flagged as near a tie
-(\SFlipsOutsideBound{} outside it). Table~\ref{tab:sources} summarises each source.
+floating-point model. In runs without a clipped feature the largest gap was
+$\SMaxGapLinClean$ in $R^2$ over \SNCleanLin{} linear runs, and $\SMaxGapLogClean$ and
+$\SMaxGapSoftClean$ in accuracy for logistic and softmax: at most one decision in 100. With
+clipping the gaps reach $\SMaxGapLin$ in $R^2$ (Student-$t_3$), and $\SMaxGapLog$ and
+$\SMaxGapSoft$ in accuracy. The sources responsible are the heavy-tailed, skewed and spiked
+ones (Laplace, Student-$t_3$, exponential, lognormal, spiked), which put many values beyond
+$4\sigma$ (Table~\ref{tab:sources}). Decisions changed on \SFlipsLog{} of \SDecisionsLog{}
+logistic rows and \SFlipsSoft{} of \SDecisionsSoft{} softmax rows, always on rows within the
+bound of a tie, as Proposition~\ref{prop:err} implies.
 
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{fig5_metrics}
-\caption{Task metric through the scheme against the floating-point model, all synthetic
-runs. Orange: runs in which some feature was clipped.}
+\caption{Task metric through the scheme against the floating-point model, one point per
+synthetic run. Orange: some feature was clipped.}
 \label{fig:metrics}
 \end{figure*}
 
 \begin{table}[t]
 \centering
-\caption{Per-source summary of experiment S (all tasks and $P$ pooled).}
+\caption{Experiment S by source, all tasks and $P$ pooled: mean $h$ and $m/n$, clipped
+values, largest score error, largest $R^2$ gap (linear) and changed decisions
+(classification).}
 \label{tab:sources}
 \resizebox{\columnwidth}{!}{\input{generated/tab_sources}}
 \end{table}
 
 \subsection{Choice of format}
 
-Fig.~\ref{fig:format} shows the format grid. The error falls by half per extra bit until
-the other term dominates: extra weight bits do not help while $f_X$ is small, and vice
-versa. For lognormal features the clipping error at $A_X=4\sigma$ dominates every format.
-Fig.~\ref{fig:formatcost} shows the price: $\log_2 q$ grows by one per extra bit of either
-kind. The key length moves in opposite directions: $m/n$ grows with $f_w$, because weight
-bits enlarge the field without adding entropy, and falls with $f_X$, because data bits add
-entropy as fast as they enlarge the field. Balanced formats are therefore efficient. On
-Gaussian features $f_X=f_w=6$ already keeps the $R^2$ gap below $10^{-3}$ at
-$\log_2 q\approx18$, and $f_X=f_w=8$ ($\log_2 q\approx22$) brings the maximum score
-error to about $10^{-2}$; we use the latter as the default.
+Fig.~\ref{fig:format} shows the format grid. The error halves with each extra bit until
+the other operand's rounding dominates: extra weight bits do not help while $f_X$ is
+small, and vice versa. For lognormal features the clipping error at $A_X=4\sigma$ dominates
+every format. Fig.~\ref{fig:formatcost} shows the price. $\log_2q$ grows by one with each
+extra bit of either kind, but the key length responds in opposite directions: $m/n$ grows
+with $f_w$, because weight bits enlarge the field without adding entropy, and falls with
+$f_X$, because each data bit adds as much entropy as field. Balanced formats are therefore
+efficient. On Gaussian features $f_X=f_w=6$ already keeps the $R^2$ gap below $10^{-3}$ at
+$\log_2q\approx18$, and $f_X=f_w=8$ ($\log_2q\approx22$) brings the largest score error to
+about $10^{-2}$; we use the latter as the default.
 
 \begin{figure*}[t]
 \centering
@@ -328,48 +382,51 @@ error to about $10^{-2}$; we use the latter as the default.
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{fig3c_format_cost}
-\caption{Field size and key length over the format grid.}
+\caption{Field size and key length over the format grid (Gaussian features, linear
+model).}
 \label{fig:formatcost}
 \end{figure}
 
-\subsection{Key length}
+\subsection{Key length and leakage}
 
 Across the continuous synthetic sources, $h$ ranged from $\SHMin$ to $\SHMax$ and $m/n$
-from $\SMoverNMin$ to $\SMoverNMax$ (Fig.~\ref{fig:keylen}); correlation lowers $h$ and
-lengthens the key, partly because correlated sources are sized by the looser bounds
-route. Two low-entropy sources need a key almost as long as the data: the
-three-point discrete source ($h=\SDiscH$, $m/n=\SDiscMoverN$) and the spiked source, with
-most of its mass on one value ($h=\SSpikedH$, $m/n=\SSpikedMoverN$). Little entropy means
-little to smooth with, and the points follow $m/n\approx1-h$ closely. The
-leakage bound $\varepsilon_c$ ranged from $\EpsCMin$ to $\EpsCMax$ in $\log_q$ units.
+from $\SMoverNMin$ to $\SMoverNMax$ (Fig.~\ref{fig:keylen}). Correlation lowers $h$ and
+lengthens the key, partly because correlated sources are sized by the looser bounds. Two
+low-entropy sources need a key almost as long as the data: the three-point discrete source
+($h=\SDiscH$, $m/n=\SDiscMoverN$) and the spiked source, which puts most of its mass on one
+value ($h=\SSpikedH$, $m/n=\SSpikedMoverN$). With little entropy there is little to smooth
+with. All runs follow $m/n\approx1-h$. The leakage bound $\varepsilon_c$ ranged from
+$\EpsCMin$ to $\EpsCMax$ in $\log_q$ units, at most $\EpsCBitsMax$ bits per set of $r$
+values.
 
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{fig4_key_length}
-\caption{Key length per stored value across sources (left) and against the entropy per
+\caption{Key length per stored value by source (left) and against the entropy per stored
 value (right).}
 \label{fig:keylen}
 \end{figure*}
 
-\subsection{Cost: inference versus training queries}
+\subsection{Cost: inference against training queries}
 
-At degree one, $\lambda=m+1$ grows linearly with the data. Table~\ref{tab:cost} and
-Fig.~\ref{fig:cost} show the measured cost. At $N=\CN$ rows ($n=\Cn$) the scheme used
-$\CLam$ workers, while a degree-two least-squares gradient query on the same data would need
-$\lambda=\binom{m+2}{2}=\CDTwoLam$, about $\CRatio\times$ more. The complete run at that size,
-from upload to all decoded scores, took about \CTotal{}~s, split roughly evenly between
-building the shares (37~s), building the interpolation matrix once (56~s) and evaluating
-the $\CN$ queries on every worker (54~s); decoding all scores took 3~s. The matrix is
-reused by every later request on the same upload.
+At degree one, $\lambda=m+1$ grows linearly with the data (Table~\ref{tab:cost},
+Fig.~\ref{fig:cost}). At $N=\CN$ rows ($n=\Cn$) the scheme used $\CLam$ workers. A
+degree-two gradient query on the same rows needs $\lambda'=\binom{m'+2}{2}=\CDTwoLam$, where
+$m'$ is its own key length, about $\CRatio\times$ more. The complete run at that size, from
+upload to the last decoded score, took about \CTotal{}~s: 37~s to build the shares, 56~s to
+build the interpolation matrix, 54~s for the workers to evaluate all $\CN$ queries, and 3~s
+to decode. The shares and the matrix are built once per upload and serve every later
+request.
 
-A practical limit comes from the arithmetic library. Its matrix product falls back to
-Python integers when the inner dimension times $q^2$ exceeds $2^{63}$: at $n=4{,}420$
-storing took 28.8~s at $\log_2 q=24$ but 872.9~s at $\log_2 q=27$. The default formats keep
-$\log_2 q$ near 22--24.
+The arithmetic library sets a practical limit: its matrix product falls back to Python
+integers when the largest matrix dimension times $q^2$ exceeds $2^{63}$. At $n=4{,}420$,
+building the shares took 28.8~s at $\log_2q=24$ but 872.9~s at $\log_2q=27$. The default
+formats keep $\log_2q$ between $\SLogQMin$ and $\SLogQMax$.
 
 \begin{table}[t]
 \centering
-\caption{Cost against stored size ($P=10$, $f_X=f_w=8$).}
+\caption{Cost against stored size ($P=10$, $f_X=f_w=8$). Times are for one upload and all
+$N$ scores. The last column is the plan for a degree-two training query.}
 \label{tab:cost}
 \resizebox{\columnwidth}{!}{\input{generated/tab_cost}}
 \end{table}
@@ -383,25 +440,25 @@ $\log_2 q$ near 22--24.
 
 \subsection{Real data}
 
-Fig.~\ref{fig:real} shows every stored row of both datasets at $f_X=f_w=8$,
-$A_X=4\sigma$. On diabetes ($n=\RDiabn$, $\log_2 q=\RDiabLogQ$, $h=\RDiabH$,
-$m=\RDiabM$), $R^2$ through the scheme was $\RDiabScheme$ against $\RDiabFloat$ in
-floating point. On wine ($n=\RWinen$, $h=\RWineH$, $m=\RWineM$), accuracy was
-$\RWineScheme$ against $\RWineFloat$, with \RWineFlips{} decision flips. The largest errors
-come from the \RDiabClipped{} and \RWineClipped{} clipped values, and so do the scheme's
-apparent gains: on diabetes clipping two outliers acts as winsorisation and slightly raises
-$R^2$, and on wine the single flipped decision happened to be correct.
-Table~\ref{tab:real} shows that a $\pm8\sigma$ clip removes all clipping, at the cost of
-one more bit of field: the maximum error drops to $0.007$ (diabetes) and $0.020$ (wine),
-$R^2$ is within $2\times10^{-4}$ of floating point, and the wine decisions are identical.
-Fig.~\ref{fig:realformat} shows that raising $f_X$ beyond the precision at which the data
-were recorded lowers $h$: the field grows but the provisional entropy does not.
+Fig.~\ref{fig:real} shows every stored row of both datasets at $f_X=f_w=8$ and
+$A_X=4\sigma$. On diabetes ($n=\RDiabn$, $\log_2q=\RDiabLogQ$, $h=\RDiabH$, $m=\RDiabM$),
+$R^2$ through the scheme was $\RDiabScheme$ against $\RDiabFloat$ in floating point. On wine
+($n=\RWinen$, $h=\RWineH$, $m=\RWineM$), accuracy was $\RWineScheme$ against $\RWineFloat$,
+and the decision differed from the floating-point model on \RWineFlips{} of \RWineN{} rows.
+The largest errors come from \RDiabClipped{} and \RWineClipped{} clipped values, and so do
+the apparent gains: on diabetes, clipping two outliers acts like winsorisation and raises
+$R^2$ slightly, and on wine the changed decision happened to be correct.
+Table~\ref{tab:real} shows that a $\pm8\sigma$ clip removes all clipping for one more bit of
+field: the largest error drops to $0.007$ (diabetes) and $0.020$ (wine), $R^2$ is within
+$2\times10^{-4}$ of floating point, and every wine decision matches.
+Fig.~\ref{fig:realformat} shows that raising $f_X$ past the precision at which the data
+were recorded lowers $h$: the field keeps growing, but the provisional entropy does not.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{fig1_real_scatter}
-\caption{Real data through the scheme: each point is one stored row (one per class logit
-for wine).}
+\caption{Real data through the scheme: one point per stored row (per class logit for
+wine). The line marks equality with the floating-point model.}
 \label{fig:real}
 \end{figure}
 
@@ -419,13 +476,26 @@ for wine).}
 \label{fig:realformat}
 \end{figure*}
 
+\subsection{Storage and communication}
+
+The client keeps $m$ field elements instead of $n$: $\RDiabMoverN\,n$ on diabetes and
+$\RWineMoverN\,n$ on wine. Each score costs a download of $\lambda=m+1$ field elements, so
+scoring every stored row cost $\RDiabDownload$ elements on diabetes and $\RWineDownload$ on
+wine. Without the provider's computation, the client would need $\Xt$ and $G$ to decrypt the
+rows itself, $n(m+1)$ elements: $\RDiabDecryptDownload$ and $\RWineDecryptDownload$. This
+comparison assumes, as the ICC model does, that $G$ is uniformly random and is not kept by
+the client. If $G$ were generated from a short public seed, local decryption would need
+only $n$ elements, and the scheme's communication advantage would lie in queries that
+combine many stored values, such as sums over rows, rather than in per-row scores.
+% DANIEL: confirm this framing (see the question in the session).
+
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Limitations and future work}
 
-\textbf{Adaptive queries.} Training by gradient descent sends queries that depend on
-earlier results, which Observation~\ref{obs:inference} does not cover. Two directions are
-open: queries built from data moments, and padding the weights with a fresh one-time pad
-per request; the latter requires revisiting the ICC analysis.
+\textbf{Adaptive queries.} Gradient descent sends queries that depend on earlier results,
+which Observation~\ref{obs:inference} does not cover. Two directions are open: queries
+built from data moments, and padding the weights with a fresh one-time pad per request.
+The second requires revisiting the ICC analysis.
 
 \textbf{Real-data entropy.} The real-data key lengths rest on a Gaussian model of the
 feature density. A model-free lower bound on $H_p(X)$ for correlated data would make them
@@ -433,16 +503,17 @@ unconditional.
 
 \textbf{Scale.} One upload of $n$ values needs $\lambda=m+1\approx n(1-h)$ workers.
 Splitting the data into independently keyed blocks would cap this, but needs a leakage
-composition argument we leave to future work. Strongly correlated datasets such as breast
-cancer (30 features, correlations up to $0.998$) are deferred for the same reason: their
-min-entropy bound is far below the product of the marginals.
+composition argument that we leave to future work. Strongly correlated datasets, such as
+breast cancer (30 features, correlations up to $0.998$), are deferred: the min-entropy
+bound charges for the correlation, about 51 bits per row under a Gaussian fit, so the key
+approaches the length of the data.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Conclusion}
 
-Inference with a public model on stored data fits ICC without modification: the scores are
-degree-one queries, the provider's view is the storage view, and fixed-point encoding gives
-exact integers with an error the client chooses before upload. Across synthetic sources,
+Inference with a public model on stored data fits ICC without modification. The scores are
+degree-one queries, the provider's view is its view at storage, and fixed-point encoding
+gives exact integers whose error the client fixes before upload. Across synthetic sources,
 formats and two real datasets, the scheme's predictions matched the floating-point model
 within the analytic bound, with a number of workers linear in the data size.
 

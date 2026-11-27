@@ -154,6 +154,13 @@ def numbers(S, F, C, R) -> list:
             out.append(macro(f"R{tag}Flips", big(r["flips"])))
             out.append(macro(f"R{tag}ErrMax", sci(r["err_max"], 2)))
             out.append(macro(f"R{tag}Wall", f"{r['wall']:.0f}"))
+            out.append(macro(f"R{tag}MoverN", f"{r['m'] / r['n']:.2f}"))
+            out.append(macro(f"R{tag}N", big(r["N"])))
+            out.append(macro(f"R{tag}P", big(r["P"])))
+            out.append(macro(f"R{tag}Queries", big(r["queries"])))
+            out.append(macro(f"R{tag}Download", big(r["queries"] * r["lam"])))
+            # the alternative of decrypting locally: the stored rows plus G's columns for them
+            out.append(macro(f"R{tag}DecryptDownload", big(r["n"] * (r["m"] + 1))))
     return out
 
 

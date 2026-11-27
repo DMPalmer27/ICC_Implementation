@@ -32,20 +32,23 @@ that depends on the data (`docs/GD_LINEAR_REGRESSION.md` §5). That work is paus
 Theorem 1 bounds `I(X_R; x̃) ≤ ε_c` for every `r`-subset `R`. It says nothing about
 queries. Under the three rules below, inference adds nothing to that bound.
 
-**Argument (Lemma A, no new math).** Everything the provider sees is `x̃`, `G` and the
-public query polynomials `f_1, …, f_Q`. Each worker's output `f_j(x̃ − tG)` is a
-deterministic function of those. If the queries do not depend on `X`, then the provider's
-whole view is a function of `(x̃, G, f_1..f_Q)`, where `(f_1..f_Q)` is independent of
-`(X, k)`. Data processing then gives `I(X_R; view) = I(X_R; x̃, G) ≤ ε_c`.
+**Argument (Lemma A, no new math).** Theorem 1 is a statement about one fixed, public `G`
+(it holds for a random `G` with probability ≥ 1 − 1/a), so fix such a `G`. Everything else
+the provider sees is `x̃`, the public query polynomials `f_1, …, f_Q`, and the workers'
+outputs. Each output `f_j(x̃ − tG)`, and the server's accept/refuse decision, is a
+deterministic function of `(x̃, f_j)`. So `I(X_R; view) = I(X_R; x̃, f_{1:Q}) = I(X_R; x̃) +
+I(X_R; f_{1:Q} | x̃)`. Because `x̃` is a function of `(X, k)` and the queries are independent
+of `(X, k)`, the last term is zero, which leaves `I(X_R; view) = I(X_R; x̃) ≤ ε_c`.
 
-The three rules make "the queries do not depend on `X`" true:
+The three rules make "the queries are independent of `(X, k)`" true:
 
-1. **The model is not fitted on the stored rows.** Training rows and stored rows are
-   disjoint: a train/store split, or fresh synthetic draws. A model fitted on `X` is a
-   function of `X`, and publishing it as query coefficients would leak.
-2. **Preprocessing statistics come from the training rows.** Standardisation means and
-   standard deviations, and the label scale, are computed on the training split, for the
-   same reason.
+1. **The model is fitted on rows independent of the stored rows.** Training rows and stored
+   rows are disjoint: a train/store split, or fresh synthetic draws. A model fitted on `X` is
+   a function of `X`, and publishing it as query coefficients would leak.
+2. **Every other public quantity comes from the training rows or the public format.** This
+   covers the standardisation means and standard deviations, the label scale, the clip
+   (in σ units), `q` and `m`, for the same reason. The provisional real-data entropy bound
+   is fitted on the training half for this reason too.
 3. **No adaptivity.** Which rows are scored and with which model is fixed in advance.
 
 What the client learns (the scores) is not part of the provider's view. Whether the
