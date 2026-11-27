@@ -7,6 +7,19 @@ Timeline: started Jan 2026 as an independent study; the Spring 2026 report
 (`Written_Resources/`) is the deliverable for that semester. Continuing through
 ~mid-2027 as the MS thesis.
 
+## Current task: inference paper (2026-11-26, branch `inference-report`)
+
+Live GD is **paused** (it leaks through the query weights). The Fall 2026 deliverable is a LaTeX
+paper on ICC for **inference**: data stored once, a public model trained elsewhere scores every
+stored row with degree-1 queries, requests non-adaptive. Due ~2026-12-02. Design and decisions:
+**`docs/INFERENCE.md`**. Paper sources: `paper/` (IEEEtran; Daniel compiles on Overleaf, no local
+TeX). Numbers and tables in the paper are macros generated from the CSVs
+(`tools/inference_tables.py` → `paper/generated/`); figures from `tools/plot_inference.py`
+(copied to `paper/figures/`). Deferred: blocking (needs a lemma), breast cancer (overnight later),
+real-data entropy is provisional pending Raviv. `utils.get_information_set` was rewritten
+(recursion limit at `m ≈ 990`) — flagged for Daniel's review. Branch `inference-report` is
+stacked on `gd-linear-regression`.
+
 ## Status and next task (handoff, 2026-10-20)
 
 **Where things stand.** Branch `choose-q` (pushed) holds all work: it is stacked on the unmerged
@@ -110,6 +123,16 @@ shim in `main.py`, so modules keep importing each other by plain name (`from uti
 | `tools/gd_fw_ablation.py` | Encoded floor vs weight bits `f_w` ∈ {4,6,8,10}: reruns each finished sweep run's dataset through plaintext integer GD (bit-identical to the scheme; f_w = 4 is checked against the sweep) |
 | `tools/plot_gd.py` | Phase 1 figures → `results/figures/gd_phase1/fig*.pdf/.png` |
 | `tests/test_gd.py` | 38 Phase 1 checks (~2 s): bit-exact trajectories, intercept bound, exact entropies vs brute force |
+| `icc/inference.py` | Degree-1 score queries: `score_queries`, `predict_scores(client, server, …)` (one decode for all rows/outputs), `descale` |
+| `tools/inference_source.py` | Synthetic feature sources (exact code pmfs/entropies) and task designs for the inference study |
+| `tools/inference_setup.py` | Fit model (float) → quantise → `plan_inference` (q, m, λ, ε_c) → `upload`; integer oracle, analytic score-error bound, metrics |
+| `tools/real_data.py` | Diabetes/wine: public-seed 50/50 split, train-only standardisation, PROVISIONAL min-entropy bound |
+| `tools/inference_study.py` | Experiments S/F/C/R → `results/inference_<exp>.csv`; `--dry-run`, `--fast`, `--resume` |
+| `tools/plot_inference.py` | Inference figures → `results/figures/inference/` and `paper/figures/` |
+| `tools/inference_tables.py` | Number macros and tables → `paper/generated/` |
+| `tests/test_inference.py` | 21 inference checks (~5 s): exactness, gate, error bound, information set, entropies, real-data hygiene |
+| `docs/INFERENCE.md` | Inference design: the three privacy rules, field size, error bound, provisional real-data entropy, deferred items |
+| `paper/` | LaTeX sources of the inference paper (`main.tex`, `refs.bib`, `generated/`, `figures/`) |
 | `tools/crt_leakage_demo.py` | Brute-force proof that several encodings of the same data, each with `m` sized alone, reveal it; joint sizing does not |
 | `results/full_test_pre_entropy_fix.txt` | Full `test_icc.py` run before the Week 1 entropy fix (baseline) |
 | `results/full_test_post_fix.txt` | Full `test_icc.py` run after it |
@@ -171,6 +194,9 @@ Use the project venv (Python 3.11, `galois` + `numpy`). Run from the repo root:
 caffeinate -dimsu .venv/bin/python tools/gd_sweep.py --order coverage --resume   # real sweep, ~58 h; every cell covered by ~11.7 h
 .venv/bin/python tools/gd_fw_ablation.py           # floor vs f_w, plaintext, after the sweep (~min)
 .venv/bin/python tools/plot_gd.py [--suffix _fast]   # Phase 1 figures
+.venv/bin/python tests/test_inference.py               # inference checks, ~5 s
+caffeinate -dimsu .venv/bin/python tools/inference_study.py --exp all --resume   # ~2 h
+.venv/bin/python tools/plot_inference.py && .venv/bin/python tools/inference_tables.py
 ```
 
 The full suite took ~81 min before the Week 1 pass and now takes ~9 s, so it is cheap to
