@@ -90,22 +90,34 @@ def numbers(S, F, C, R) -> list:
             if rows:
                 gap = max(abs(r[f"scheme_{met}"] - r[f"float_{met}"]) for r in rows)
                 out.append(macro(f"SMaxGap{name}", sci(gap)))
+                rc = [r for r in rows if (r["clipped_values"] or 0) == 0]
+                if rc:
+                    gc = max(abs(r[f"scheme_{met}"] - r[f"float_{met}"]) for r in rc)
+                    out.append(macro(f"SMaxGap{name}Clean", sci(gc)))
+                    out.append(macro(f"SNClean{name}", big(len(rc))))
                 if task != "linear":
                     out.append(macro(f"SFlips{name}", big(sum(r["flips"] for r in rows))))
                     out.append(macro(f"SDecisions{name}", big(sum(r["N"] for r in rows))))
         dec = [r for r in S if r["task"] != "linear"]
         out.append(macro("SFlipsOutsideBound", big(sum(max(0, r["flips"] - r["flip_possible"])
                                                        for r in dec))))
-        mn = [r["m"] / r["n"] for r in S if r["family"] != "spiked"]
+        out.append(macro("SMaxErrUnclippedRows", sci(max(r["err_max_unclipped"] for r in S
+                                                         if r["err_max_unclipped"] is not None))))
+        low = ("spiked", "discrete3")
+        mn = [r["m"] / r["n"] for r in S if r["family"] not in low]
         out.append(macro("SMoverNMin", f"{min(mn):.2f}"))
         out.append(macro("SMoverNMax", f"{max(mn):.2f}"))
-        h = [r["h"] for r in S if r["family"] != "spiked"]
+        h = [r["h"] for r in S if r["family"] not in low]
         out.append(macro("SHMin", f"{min(h):.2f}"))
         out.append(macro("SHMax", f"{max(h):.2f}"))
         sp = [r for r in S if r["family"] == "spiked"]
         if sp:
             out.append(macro("SSpikedH", f"{np.mean([r['h'] for r in sp]):.2f}"))
             out.append(macro("SSpikedMoverN", f"{np.mean([r['m'] / r['n'] for r in sp]):.2f}"))
+        d3 = [r for r in S if r["family"] == "discrete3"]
+        if d3:
+            out.append(macro("SDiscH", f"{np.mean([r['h'] for r in d3]):.2f}"))
+            out.append(macro("SDiscMoverN", f"{np.mean([r['m'] / r['n'] for r in d3]):.2f}"))
         out.append(macro("SLogQMin", f"{min(r['log2_q'] for r in S):.1f}"))
         out.append(macro("SLogQMax", f"{max(r['log2_q'] for r in S):.1f}"))
     if allr:

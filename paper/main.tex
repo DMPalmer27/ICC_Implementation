@@ -55,8 +55,11 @@ guarantee unchanged, that the model's scores are degree-one queries whose fixed-
 encoding yields an explicit field size and an explicit error bound, and that degree one
 keeps the number of workers linear in the data size. In \NRuns{} end-to-end runs covering
 \NScores{} scores over eleven synthetic sources, a grid of fixed-point formats, and two
-real datasets, every score decoded exactly to its integer value, the measured error never
-exceeded the analytic bound, and the task metrics matched the floating-point model. On the
+real datasets, every score decoded exactly to its integer value and the measured error
+never exceeded the analytic bound. Without clipping, task metrics matched the floating-point
+model to within $10^{-3}$ in $R^2$ and one decision per hundred rows; the larger
+deviations all came from clipping heavy-tailed features, which the bound predicts and the
+client controls by the choice of clip. On the
 diabetes dataset the scheme reaches $R^2=\RDiabScheme$ against $\RDiabFloat$ in floating
 point, and on wine an accuracy of $\RWineScheme$ against $\RWineFloat$, using
 $\RDiabLam$ and $\RWineLam$ workers respectively. At the same data size, a degree-two
@@ -261,7 +264,9 @@ Proposition~\ref{prop:err}: there were \NViolations{} violations. Without clippi
 largest score error was $\SMaxErrClean$ and at most $\SMaxErrOverBoundClean$ of the bound
 (the mean error is $\SMeanErrOverBoundClean$ of the mean bound). In the \SNClippedRuns{}
 synthetic runs where some feature fell outside $\pm4\sigma$, the clipping term dominates
-and the error reached $\SMaxErrClipped$; the bound tracks it.
+and the bound is nearly tight. The largest error, $\SMaxErrClipped$, came from two
+Student-$t_3$ values far outside the clip; on the rows of every run with no clipped feature
+the error stayed below $\SMaxErrUnclippedRows$.
 
 \begin{figure}[t]
 \centering
@@ -274,8 +279,13 @@ Proposition~\ref{prop:err}, one point per synthetic run.}
 \subsection{Task metrics across sources}
 
 Fig.~\ref{fig:metrics} plots each run's metric through the scheme against the
-floating-point model. The largest gap is $\SMaxGapLin$ in $R^2$ for linear regression,
-$\SMaxGapLog$ in accuracy for logistic and $\SMaxGapSoft$ for softmax. Decisions flipped on
+floating-point model. In runs with no clipped feature the largest gap was
+$\SMaxGapLinClean$ in $R^2$ (\SNCleanLin{} linear runs) and $\SMaxGapLogClean$ and
+$\SMaxGapSoftClean$ in accuracy for logistic and softmax, that is, at most one of 100
+decisions. With clipping the gaps reach $\SMaxGapLin$ in $R^2$ (Student-$t_3$),
+$\SMaxGapLog$ and $\SMaxGapSoft$ in accuracy: the heavy-tailed and skewed sources
+(Laplace, Student-$t_3$, exponential, lognormal, spiked) put values beyond $4\sigma$, and a
+$4\sigma$ clip is the wrong choice for them. Decisions flipped on
 \SFlipsLog{} of \SDecisionsLog{} logistic rows and \SFlipsSoft{} of \SDecisionsSoft{}
 softmax rows, and every flip occurred on a row the bound flagged as near a tie
 (\SFlipsOutsideBound{} outside it). Table~\ref{tab:sources} summarises each source.
@@ -301,8 +311,12 @@ Fig.~\ref{fig:format} shows the format grid. The error falls by half per extra b
 the other term dominates: extra weight bits do not help while $f_X$ is small, and vice
 versa. For lognormal features the clipping error at $A_X=4\sigma$ dominates every format.
 Fig.~\ref{fig:formatcost} shows the price: $\log_2 q$ grows by one per extra bit of either
-kind, and $m/n$ grows with $f_w$ because the weight bits enlarge the field without adding
-entropy. \todo{one sentence on the recommended format once the full grid is in}
+kind. The key length moves in opposite directions: $m/n$ grows with $f_w$, because weight
+bits enlarge the field without adding entropy, and falls with $f_X$, because data bits add
+entropy as fast as they enlarge the field. Balanced formats are therefore efficient. On
+Gaussian features $f_X=f_w=6$ already keeps the $R^2$ gap below $10^{-3}$ at
+$\log_2 q\approx18$, and $f_X=f_w=8$ ($\log_2 q\approx22$) brings the maximum score
+error to about $10^{-2}$; we use the latter as the default.
 
 \begin{figure*}[t]
 \centering
@@ -320,10 +334,13 @@ entropy. \todo{one sentence on the recommended format once the full grid is in}
 
 \subsection{Key length}
 
-Across the synthetic sources other than the spiked one, $h$ ranged from $\SHMin$ to
-$\SHMax$ and $m/n$ from $\SMoverNMin$ to $\SMoverNMax$ (Fig.~\ref{fig:keylen}). The spiked
-source, with most of its mass on a single value, has $h=\SSpikedH$ and needs a key about as
-long as the data ($m/n=\SSpikedMoverN$): little entropy means little to smooth with. The
+Across the continuous synthetic sources, $h$ ranged from $\SHMin$ to $\SHMax$ and $m/n$
+from $\SMoverNMin$ to $\SMoverNMax$ (Fig.~\ref{fig:keylen}); correlation lowers $h$ and
+lengthens the key, partly because correlated sources are sized by the looser bounds
+route. Two low-entropy sources need a key almost as long as the data: the
+three-point discrete source ($h=\SDiscH$, $m/n=\SDiscMoverN$) and the spiked source, with
+most of its mass on one value ($h=\SSpikedH$, $m/n=\SSpikedMoverN$). Little entropy means
+little to smooth with, and the points follow $m/n\approx1-h$ closely. The
 leakage bound $\varepsilon_c$ ranged from $\EpsCMin$ to $\EpsCMax$ in $\log_q$ units.
 
 \begin{figure*}[t]
@@ -340,7 +357,10 @@ At degree one, $\lambda=m+1$ grows linearly with the data. Table~\ref{tab:cost} 
 Fig.~\ref{fig:cost} show the measured cost. At $N=\CN$ rows ($n=\Cn$) the scheme used
 $\CLam$ workers, while a degree-two least-squares gradient query on the same data would need
 $\lambda=\binom{m+2}{2}=\CDTwoLam$, about $\CRatio\times$ more. The complete run at that size,
-from upload to all decoded scores, took about \CTotal{}~s.
+from upload to all decoded scores, took about \CTotal{}~s, split roughly evenly between
+building the shares (37~s), building the interpolation matrix once (56~s) and evaluating
+the $\CN$ queries on every worker (54~s); decoding all scores took 3~s. The matrix is
+reused by every later request on the same upload.
 
 A practical limit comes from the arithmetic library. Its matrix product falls back to
 Python integers when the inner dimension times $q^2$ exceeds $2^{63}$: at $n=4{,}420$
@@ -368,8 +388,12 @@ $A_X=4\sigma$. On diabetes ($n=\RDiabn$, $\log_2 q=\RDiabLogQ$, $h=\RDiabH$,
 $m=\RDiabM$), $R^2$ through the scheme was $\RDiabScheme$ against $\RDiabFloat$ in
 floating point. On wine ($n=\RWinen$, $h=\RWineH$, $m=\RWineM$), accuracy was
 $\RWineScheme$ against $\RWineFloat$, with \RWineFlips{} decision flips. The largest errors
-come from the \RDiabClipped{} and \RWineClipped{} clipped values; Table~\ref{tab:real} shows
-that a $\pm8\sigma$ clip removes them at the cost of a slightly larger field.
+come from the \RDiabClipped{} and \RWineClipped{} clipped values, and so do the scheme's
+apparent gains: on diabetes clipping two outliers acts as winsorisation and slightly raises
+$R^2$, and on wine the single flipped decision happened to be correct.
+Table~\ref{tab:real} shows that a $\pm8\sigma$ clip removes all clipping, at the cost of
+one more bit of field: the maximum error drops to $0.007$ (diabetes) and $0.020$ (wine),
+$R^2$ is within $2\times10^{-4}$ of floating point, and the wine decisions are identical.
 Fig.~\ref{fig:realformat} shows that raising $f_X$ beyond the precision at which the data
 were recorded lowers $h$: the field grows but the provisional entropy does not.
 

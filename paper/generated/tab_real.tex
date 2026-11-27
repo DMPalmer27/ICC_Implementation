@@ -1,0 +1,15 @@
+\begin{tabular}{llrrrrrrl}
+\toprule
+data & $f_X/f_w$, clip & $\log_2 q$ & $h$ & $m$ & clipped & max err & flips & metric (float $\to$ scheme) \\
+\midrule
+diabetes & 4/4, $\pm4\sigma$ & 14.3 & 0.288 & 1{,}579 & 2 & 0.166 & -- & $R^2$ 0.5156 $\to$ 0.5161 \\
+diabetes & 6/6, $\pm4\sigma$ & 18.3 & 0.282 & 1{,}592 & 2 & 0.128 & -- & $R^2$ 0.5156 $\to$ 0.5169 \\
+diabetes & 8/8, $\pm4\sigma$ & 22.3 & 0.254 & 1{,}656 & 2 & 0.182 & -- & $R^2$ 0.5156 $\to$ 0.5173 \\
+diabetes & 8/8, $\pm8\sigma$ & 23.3 & 0.243 & 1{,}680 & 0 & 0.007 & -- & $R^2$ 0.5156 $\to$ 0.5158 \\
+\midrule
+wine & 4/4, $\pm4\sigma$ & 14.7 & 0.326 & 786 & 2 & 1.053 & 1 & acc. 0.9438 $\to$ 0.9551 \\
+wine & 6/6, $\pm4\sigma$ & 18.7 & 0.331 & 780 & 2 & 0.982 & 1 & acc. 0.9438 $\to$ 0.9551 \\
+wine & 8/8, $\pm4\sigma$ & 22.7 & 0.292 & 825 & 2 & 1.007 & 1 & acc. 0.9438 $\to$ 0.9551 \\
+wine & 8/8, $\pm8\sigma$ & 23.7 & 0.280 & 839 & 0 & 0.020 & 0 & acc. 0.9438 $\to$ 0.9438 \\
+\bottomrule
+\end{tabular}

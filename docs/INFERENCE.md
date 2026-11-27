@@ -152,6 +152,34 @@ The Gaussian `M` is a model, not a guarantee. That is the open point Raviv has t
   `log2 q = 24` against 872.9 s at `log2 q = 27`. The default formats keep `log2 q ≲ 24`.
   F is run at `N = 50` so that its larger formats stay cheap.
 
+## 7a. Results of the full run (2026-11-26/27)
+
+727 runs (S 396, F 288, C 7, R 36), 90,311 scores, all on AC power with 0 sleep events,
+about 76 minutes of compute in total.
+
+- **Exact:** all 727 runs decoded every score equal to the integer oracle.
+- **Error bound:** 0 violations. Without clipping, the max error was 0.041, at most 0.73 of the bound
+  (mean 0.16). With clipping the bound is nearly tight. The worst case was 261, from two
+  Student-t₃ values far outside ±4σ, in a run whose unclipped rows had error 0.011.
+- **Metrics:**
+  - Without clipping, the |ΔR²| was ≤ 9.9e-4, and accuracy differed by ≤ 0.01 (one decision in 100).
+  - With clipping, the largest gaps were ΔR² 0.41 (Student-t₃) and accuracy 0.02–0.03.
+  - All 81 flips were on rows the bound flagged as near a tie.
+- **Format (F):**
+  - Error halves per bit until the other operand's bits limit it.
+  - `m/n` rises with `f_w` and falls with `f_X`.
+  - Gaussian 6/6 gives ΔR² < 1e-3 at log2 q ≈ 18; 8/8 gives err ≈ 0.01 at log2 q ≈ 22.
+  - Lognormal is dominated by clipping at every format.
+- **Key length:** across continuous sources `h` = 0.31–0.49 and `m/n` = 0.54–0.69. Discrete3
+  (`h` 0.07) and spiked (`h` 0.03) need `m/n` ≈ 0.94–0.98.
+- **Cost (C, N = 442, P = 10):** λ = 2,483 (d = 1) vs 6,564,876 for the d = 2 plan (×2,644).
+  A run takes 152 s: store 37 s, build M 56 s, eval 54 s, decode 3 s.
+- **Real data (f = 8/8, ±4σ):**
+  - Diabetes: R² 0.5173 vs 0.5156, m = 1,656.
+  - Wine: acc 0.955 vs 0.944, m = 825.
+  - Both "gains" come from clipping 2 values each. At ±8σ there is no clipping: max error 0.007 and
+    0.020, R² 0.5158, and wine decisions identical.
+
 ## 8. Deferred and flagged
 
 - **Blocking** (several independent uploads, each sized alone) caps replication. It needs
