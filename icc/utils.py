@@ -65,6 +65,14 @@ def compute_symbol_p_entropy(x, q: int, p: int) -> float:
     ICC Appendix A. The alphabet distribution is estimated empirically from the n symbols
     of x, which treats them as n i.i.d. draws from one common source distribution.
 
+    WARNING -- ESTIMATE FROM THE STORED DATA. This reads the entropy off the very data being
+    stored, so an m sized from it is a function of the data, and m is public (it is the
+    shape of G): a side channel Theorem 1 does not cover, the same objection that
+    quantize.choose_field_size raises for a data-derived q. It is also an estimate, not the
+    lower bound on H_p(X) (or upper bound on max_R H_p(X_R)) the theorem needs. Fine for the
+    toy demo in main.py and test_icc.py; the studies use exact source entropies
+    (tools/synthetic_source.py, tools/inference_source.py) or quantize.entropy_bounds instead.
+
     Units are log_q, so h = 0 for deterministic data and h = 1 for data uniform over F_q.
     This is the primitive estimator; Theorem 1 wants the vector quantity H_p(X), which is
     n * h under the i.i.d. model -- see compute_p_entropy.
@@ -93,6 +101,14 @@ def compute_p_entropy(x, q: int, p: int) -> float:
     Theorem 1 bound. Renyi entropy is additive over independent coordinates, so under the
     i.i.d. source model H_p(X) = n * h where h is the per-symbol entropy.
 
+    WARNING -- ESTIMATE FROM THE STORED DATA. This reads the entropy off the very data being
+    stored, so an m sized from it is a function of the data, and m is public (it is the
+    shape of G): a side channel Theorem 1 does not cover, the same objection that
+    quantize.choose_field_size raises for a data-derived q. It is also an estimate, not the
+    lower bound on H_p(X) (or upper bound on max_R H_p(X_R)) the theorem needs. Fine for the
+    toy demo in main.py and test_icc.py; the studies use exact source entropies
+    (tools/synthetic_source.py, tools/inference_source.py) or quantize.entropy_bounds instead.
+
     Note the units: log_q, so H_p(X) ranges over [0, n] and equals n exactly when X is
     uniform over F_q^n. Previously this function returned the per-symbol h, which made the
     -H_p(X) and +max_R H_p(X_R) terms of Theorem 1 nearly cancel and forced m > n in every
@@ -109,6 +125,14 @@ def compute_max_subset_p_entropy(x, q: int, p: int, r: int) -> float:
     """
     Calculates max_R H_p(X_R) over all r-subsets R, the quantity Theorem 1 adds to the
     bound on m.
+
+    WARNING -- ESTIMATE FROM THE STORED DATA. This reads the entropy off the very data being
+    stored, so an m sized from it is a function of the data, and m is public (it is the
+    shape of G): a side channel Theorem 1 does not cover, the same objection that
+    quantize.choose_field_size raises for a data-derived q. It is also an estimate, not the
+    lower bound on H_p(X) (or upper bound on max_R H_p(X_R)) the theorem needs. Fine for the
+    toy demo in main.py and test_icc.py; the studies use exact source entropies
+    (tools/synthetic_source.py, tools/inference_source.py) or quantize.entropy_bounds instead.
 
     Under the i.i.d. source model every r-subset of X has the same distribution, so the
     maximum is attained everywhere and equals r * h in closed form. This replaces a brute

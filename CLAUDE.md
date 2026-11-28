@@ -251,6 +251,17 @@ These are thesis-math decisions. Raise them; let Daniel decide.
    `docs/QUANTIZATION.md` §4E/§11, which are left unedited pending Raviv. It also applies to
    re-uploading the same data under a fresh key.
 
+7. **Theorem 1's key length may be short of what its proof needs, for correlated data**
+   (found 2026-11-27). ICC eq. (5) needs `m ≥ n + p + log_q(1/ε) − min_{R,z} H_p(X | X_R = z)`,
+   and step (a) replaces that with the theorem's `− H_p(X) + max_R H_p(X_R)`. But Appendix B
+   proves `min_{R,z} H_p(X|X_R=z) ≤ H_p(X) − max_R H_p(X_R)`, so the requirement is AT LEAST the
+   stated bound, not at most. Equal for independent coordinates (all i.i.d. synthetic runs);
+   for correlated data (real datasets, correlated sources) the stated `m` can fall short — a
+   two-symbol example (X1 = 0 w.p. 1/2 with X2 uniform, else X1 uniform nonzero with X2 = 0)
+   loses ~1 symbol. Daniel's decision: keep the paper on the theorem as published, `% RAVIV:`
+   comment in `paper/main.tex`, raise with Raviv. `docs/CRT_PROOF.md` quotes eq. (5)(a) in the
+   reversed direction — left as is pending that discussion.
+
 Resolved in the Week 1 pass (`week1-2-optimizations`) — do not re-report as bugs:
 per-symbol vs vector entropy scaling, the two entropy paths disagreeing, the missing
 `d < m(q−1)` assertion (confirmed verbatim in the 2024 paper §IV), and the unused
